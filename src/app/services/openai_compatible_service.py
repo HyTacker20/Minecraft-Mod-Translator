@@ -11,7 +11,7 @@ DEFAULT_MODEL = "gpt-4o-mini"
 
 
 class OpenAICompatibleService(BaseTranslatorService):
-    _CHUNK_SIZE = 25
+    _CHUNK_SIZE = 10
 
     def __init__(
         self,
@@ -79,7 +79,17 @@ class OpenAICompatibleService(BaseTranslatorService):
                 max_tokens=4096,
             )
 
-            return completion.choices[0].message.content
+            content = completion.choices[0].message.content
+            finish_reason = getattr(completion.choices[0], "finish_reason", "unknown")
+            usage = getattr(completion, "usage", None)
+            logger.debug(
+                "Completion metadata: model=%s, finish_reason=%s, content_len=%s, usage=%s",
+                self._model,
+                finish_reason,
+                len(content) if content else 0,
+                usage,
+            )
+            return content
 
         try:
             response = _do_translate(json.dumps(items, ensure_ascii=False))

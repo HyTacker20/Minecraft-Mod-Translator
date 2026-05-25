@@ -14,7 +14,7 @@ class TestSettings:
         assert settings.target_mc_lang == "es_ES"
         assert settings.mods_path == "./"
         assert settings.temp_path == "temp"
-        assert settings.translation_path == "./translated"
+        assert settings.translation_path == "./translated_mods"
         assert settings.provider == "google"
 
     def test_cli_args_override(self):

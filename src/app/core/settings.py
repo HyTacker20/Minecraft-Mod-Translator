@@ -7,7 +7,7 @@ class Settings:
         self.target_mc_lang = self._format_lang("es_ES")
         self.mods_path = "./"
         self.temp_path = "temp"
-        self.translation_path = "./translated"
+        self.translation_path = "./translated_mods"
         self.provider = "google"
 
         if cli_args:
