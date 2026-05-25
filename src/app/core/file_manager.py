@@ -27,25 +27,23 @@ class FileManager:
         self.source_mc_lang = settings.source_mc_lang
         self.target_mc_lang = settings.target_mc_lang
 
-        if settings.use_ai:
-            logger.info("Using OpenAI translator...")
-            try:
-                self.translator = Translator(
-                    settings.source_google_lang,
-                    settings.target_google_lang,
-                    use_openai=True,
-                )
-            except (ImportError, ValueError) as e:
-                logger.info("OpenAI initialization failed: %s", e)
+        logger.info("Using %s translator...", settings.provider)
+        try:
+            self.translator = Translator(
+                settings.source_google_lang,
+                settings.target_google_lang,
+                provider=settings.provider,
+            )
+        except Exception as e:
+            if settings.provider != "google":
+                logger.info("%s initialization failed: %s", settings.provider, e)
                 logger.info("Falling back to Google Translate...")
                 self.translator = Translator(
-                    settings.source_google_lang, settings.target_google_lang
+                    settings.source_google_lang, settings.target_google_lang,
+                    provider="google",
                 )
-        else:
-            logger.info("Using Google Translate...")
-            self.translator = Translator(
-                settings.source_google_lang, settings.target_google_lang
-            )
+            else:
+                raise
 
     def create_needed_folders(self) -> None:
         os.makedirs(self.temp_path, exist_ok=True)

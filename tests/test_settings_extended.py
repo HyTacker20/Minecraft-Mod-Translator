@@ -11,7 +11,7 @@ class TestSettingsExtended:
         assert settings.dry_run is False
         assert settings.source_mc_lang == "en_US"
         assert settings.target_mc_lang == "es_ES"
-        assert settings.use_ai is False
+        assert settings.provider == "google"
 
     def test_replace_appdata(self):
         settings = Settings()

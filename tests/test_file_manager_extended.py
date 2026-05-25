@@ -95,7 +95,7 @@ class TestFileManagerExtended:
             uk_path = assets / "uk_ua.json"
             uk_path.write_text(json.dumps(sample_en_us_json), encoding="utf-8")
 
-        settings.use_ai = False
+        settings.provider = "google"
         fm = FileManager(settings)
         fm.convert_translated_mods()
 
@@ -184,7 +184,7 @@ class TestFileManagerExtended:
         (assets / "en_us.json").write_text(json.dumps(sample_en_us_json), encoding="utf-8")
         (assets / "uk_ua.json").write_text(json.dumps(sample_en_us_json), encoding="utf-8")
 
-        settings.use_ai = False
+        settings.provider = "google"
         fm = FileManager(settings)
         fm.convert_translated_mods()
         output = shared_dir / "mod_0"
@@ -192,7 +192,7 @@ class TestFileManagerExtended:
 
     def test_file_manager_openai_fallback(self, tmp_path: Path):
         settings = Settings()
-        settings.use_ai = True
+        settings.provider = "openai"
         settings.temp_path = str(tmp_path / "temp")
         settings.translation_path = str(tmp_path / "translated")
         settings.mods_path = str(tmp_path / "mods")
@@ -201,8 +201,8 @@ class TestFileManagerExtended:
 
         with patch("app.core.file_manager.Translator") as MockTranslator:
             mock_translator = MagicMock()
-            mock_translator.use_openai = False
-            MockTranslator.side_effect = [ImportError("no openai"), mock_translator]
+            mock_translator.provider = "google"
+            MockTranslator.side_effect = [ValueError("no api key"), mock_translator]
             fm = FileManager(settings)
-            assert fm.translator.use_openai is False
+            assert fm.translator.provider == "google"
             assert MockTranslator.call_count == 2

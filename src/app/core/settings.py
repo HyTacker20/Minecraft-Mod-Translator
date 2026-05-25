@@ -10,7 +10,7 @@ class Settings:
         self.mods_path = "./"
         self.temp_path = "temp"
         self.translation_path = "./translated"
-        self.use_ai = False
+        self.provider = "google"
 
         if cli_args:
             if hasattr(cli_args, "source") and cli_args.source:
@@ -25,8 +25,11 @@ class Settings:
             if hasattr(cli_args, "output") and cli_args.output:
                 self.translation_path = cli_args.output
 
+            if hasattr(cli_args, "provider") and cli_args.provider:
+                self.provider = cli_args.provider
+
             if hasattr(cli_args, "ai") and cli_args.ai:
-                self.use_ai = True
+                self.provider = "openai"
 
         self.source_google_lang = self._get_google_lang(self.source_mc_lang)
         self.target_google_lang = self._get_google_lang(self.target_mc_lang)

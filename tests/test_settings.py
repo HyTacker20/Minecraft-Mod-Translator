@@ -15,9 +15,24 @@ class TestSettings:
         assert settings.mods_path == "./"
         assert settings.temp_path == "temp"
         assert settings.translation_path == "./translated"
-        assert settings.use_ai is False
+        assert settings.provider == "google"
 
     def test_cli_args_override(self):
+        args = argparse.Namespace(
+            source="uk_UA",
+            target="de_DE",
+            path="./my_mods",
+            output="./my_output",
+            provider="openai",
+        )
+        settings = Settings(cli_args=args)
+        assert settings.source_mc_lang == "uk_UA"
+        assert settings.target_mc_lang == "de_DE"
+        assert settings.mods_path == "./my_mods"
+        assert settings.translation_path == "./my_output"
+        assert settings.provider == "openai"
+
+    def test_cli_args_ai_deprecated_flag(self):
         args = argparse.Namespace(
             source="uk_UA",
             target="de_DE",
@@ -26,11 +41,7 @@ class TestSettings:
             ai=True,
         )
         settings = Settings(cli_args=args)
-        assert settings.source_mc_lang == "uk_UA"
-        assert settings.target_mc_lang == "de_DE"
-        assert settings.mods_path == "./my_mods"
-        assert settings.translation_path == "./my_output"
-        assert settings.use_ai is True
+        assert settings.provider == "openai"
 
     def test_google_lang_extraction(self):
         settings = Settings()
@@ -45,10 +56,16 @@ class TestSettings:
     def test_add_translate_arguments(self):
         parser = argparse.ArgumentParser()
         add_translate_arguments(parser)
-        args = parser.parse_args(["-p", "./mods", "-s", "en_US", "-t", "uk_UA", "--ai"])
+        args = parser.parse_args(["-p", "./mods", "-s", "en_US", "-t", "uk_UA", "--provider", "openai"])
         assert args.path == "./mods"
         assert args.source == "en_US"
         assert args.target == "uk_UA"
+        assert args.provider == "openai"
+
+    def test_add_translate_arguments_deprecated_ai_flag(self):
+        parser = argparse.ArgumentParser()
+        add_translate_arguments(parser)
+        args = parser.parse_args(["-p", "./mods", "-s", "en_US", "-t", "uk_UA", "--ai"])
         assert args.ai is True
 
 
