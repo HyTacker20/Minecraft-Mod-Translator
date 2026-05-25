@@ -1,6 +1,4 @@
 import argparse
-import os
-import re
 
 
 class Settings:
@@ -39,12 +37,6 @@ class Settings:
     def _get_google_lang(self, mc_lang: str) -> str:
         google_lang = mc_lang.split("_")[0]
         return google_lang
-
-    def _replace_appdata(self, path: str) -> str:
-        pattern = re.compile(r"%appdata%", re.IGNORECASE)
-        appdata_path = os.getenv("APPDATA", "").replace("\\", "\\\\")
-        new_path = re.sub(pattern, appdata_path, path)
-        return new_path
 
     def _format_lang(self, mc_lang: str) -> str:
         language, region = mc_lang.split("_")

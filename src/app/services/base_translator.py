@@ -5,6 +5,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger("mod_translator")
 
+TRANSLATION_SYSTEM_PROMPT = """You are a professional translator specializing in video game localization.
+Translate from {source_lang} to {target_lang}.
+
+Guidelines:
+- Preserve formatting like %s, %d, {{}} placeholders
+- Maintain gaming-appropriate tone
+- Use natural, idiomatic expressions
+- Keep technical terms consistent
+
+Respond with ONLY the translated text, no explanations."""
+
+
+def make_system_prompt(source_lang: str, target_lang: str) -> str:
+    return TRANSLATION_SYSTEM_PROMPT.format(source_lang=source_lang, target_lang=target_lang)
+
 
 class BaseTranslatorService(ABC):
     def __init__(self, source_lang: str, target_lang: str, capitalize: bool = True) -> None:
@@ -47,7 +62,7 @@ class BaseTranslatorService(ABC):
                 if index < len(data):
                     time.sleep(0.1)
             except Exception as e:
-                logger.info('Error translating "%s": %s', text, e)
+                logger.warning('Error translating "%s": %s', text, e)
                 translated_data[key] = text
 
         logger.info("Successfully translated %d entries", len(data))
@@ -76,9 +91,8 @@ class BaseTranslatorService(ABC):
                     logger.info("[%d/%d] translated entry", completed, total_items)
                     translated_data[key] = translated_text
                 except Exception as e:
-                    logger.info("Error translating entry: %s", e)
-                    original = dict(data)
-                    translated_data[key] = original[key]
+                    logger.warning("Error translating entry: %s", e)
+                    translated_data[key] = data[key]
 
         logger.info("Successfully translated %d entries", len(data))
         return translated_data

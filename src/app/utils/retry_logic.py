@@ -5,11 +5,14 @@ This module provides robust retry mechanisms with exponential backoff
 to handle rate limits from Google Translate and OpenAI APIs.
 """
 
+import logging
 import random
 import time
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
+
+logger = logging.getLogger("mod_translator")
 
 # Standard error types that indicate rate limiting
 RATE_LIMIT_ERRORS = [
@@ -141,7 +144,7 @@ def retry_with_exponential_backoff(
                     if attempt == 0 and tracker.should_apply_preventive_delay():
                         preventive_delay = tracker.get_preventive_delay()
                         if preventive_delay > 0:
-                            print(f"⏳ Applying preventive delay: {preventive_delay:.1f}s to avoid rate limits")
+                            logger.info("Applying preventive delay: %.1fs to avoid rate limits", preventive_delay)
                             time.sleep(preventive_delay)
 
                     result = func(*args, **kwargs)
@@ -175,10 +178,13 @@ def retry_with_exponential_backoff(
                         delay = max(0, delay + jitter)
 
                     error_type = "rate limit" if is_rate_limit else "error"
-                    print(f"🔄 {error_type.capitalize()} detected (attempt {attempt + 1}/{max_retries + 1}): {str(e)}")
+                    logger.warning(
+                        "%s detected (attempt %d/%d): %s",
+                        error_type.capitalize(), attempt + 1, max_retries + 1, e,
+                    )
 
                     if delay > 0:
-                        print(f"⏳ Waiting {delay:.1f}s before retry...")
+                        logger.info("Waiting %.1fs before retry...", delay)
                         time.sleep(delay)
 
             # All retries exhausted
@@ -209,7 +215,7 @@ class TranslationRateLimiter:
         if tracker.should_apply_preventive_delay():
             delay = tracker.get_preventive_delay()
             if delay > 0:
-                print(f"⏳ Applying {service} preventive delay: {delay:.1f}s")
+                logger.info("Applying %s preventive delay: %.1fs", service, delay)
                 time.sleep(delay)
 
 

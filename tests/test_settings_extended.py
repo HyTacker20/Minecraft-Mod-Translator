@@ -1,6 +1,3 @@
-import os
-from unittest.mock import patch
-
 from app.core.settings import Settings
 
 
@@ -12,11 +9,3 @@ class TestSettingsExtended:
         assert settings.source_mc_lang == "en_US"
         assert settings.target_mc_lang == "es_ES"
         assert settings.provider == "google"
-
-    def test_replace_appdata(self):
-        settings = Settings()
-        with patch.dict(os.environ, {"APPDATA": "C:\\Users\\Test\\AppData\\Roaming"}):
-            result = settings._replace_appdata("%APPDATA%/mods")
-            assert "Test" in result
-            assert "mods" in result
-            assert "%APPDATA%" not in result.lower()

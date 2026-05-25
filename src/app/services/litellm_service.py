@@ -2,7 +2,7 @@ import logging
 import os
 
 from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
-from .base_translator import BaseTranslatorService
+from .base_translator import BaseTranslatorService, make_system_prompt
 
 logger = logging.getLogger("mod_translator")
 
@@ -52,16 +52,7 @@ class LitellmService(BaseTranslatorService):
         def _do_translate(t: str) -> str:
             global_rate_limiter.apply_service_delay("litellm")
 
-            system_prompt = f"""You are a professional translator specializing in video game localization.
-Translate from {self.source_lang} to {self.target_lang}.
-
-Guidelines:
-- Preserve formatting like %s, %d, {{}} placeholders
-- Maintain gaming-appropriate tone
-- Use natural, idiomatic expressions
-- Keep technical terms consistent
-
-Respond with ONLY the translated text, no explanations."""
+            system_prompt = make_system_prompt(self.source_lang, self.target_lang)
 
             response = self._completion(
                 model=self._model,
@@ -83,5 +74,5 @@ Respond with ONLY the translated text, no explanations."""
         try:
             return _do_translate(text)
         except Exception as e:
-            logger.info("LiteLLM translation failed for '%s': %s", text, e)
+            logger.warning("LiteLLM translation failed for '%s': %s", text, e)
             return text

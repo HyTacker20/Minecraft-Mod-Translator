@@ -63,8 +63,6 @@ uv run pyinstaller --onefile \
     --hidden-import "app.parsers.lang_parser" \
     --hidden-import "app.parsers.mcfunction_parser" \
     --hidden-import "app.services" \
-    --hidden-import "app.services.google_translate" \
-    --hidden-import "app.services.openai_translate" \
     --hidden-import "app.data" \
     --hidden-import "deep_translator" \
     --hidden-import "rich" \
@@ -129,8 +127,6 @@ uv run pyinstaller --onefile \
     --hidden-import "app.parsers.lang_parser" \
     --hidden-import "app.parsers.mcfunction_parser" \
     --hidden-import "app.services" \
-    --hidden-import "app.services.google_translate" \
-    --hidden-import "app.services.openai_translate" \
     --hidden-import "app.data" \
     --hidden-import "deep_translator" \
     --hidden-import "rich" \
