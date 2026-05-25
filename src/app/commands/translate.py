@@ -4,9 +4,10 @@ Minecraft mod translation orchestration.
 
 import argparse
 import json
-import logging
 import os
 import zipfile
+
+from loguru import logger
 
 from ..core.config_loader import find_config_file, load_config
 from ..core.file_manager import FileManager
@@ -16,9 +17,11 @@ from ..logging_config import setup_logging
 from ..utils.progress import ProgressReporter
 from ..utils.stats import OverallStats
 
-logger = logging.getLogger("mod_translator")
-
 JAR = ".jar"
+
+
+def _is_logging_configured() -> bool:
+    return len(logger._core.handlers) > 0  # type: ignore[attr-defined]
 
 
 def add_translate_arguments(parser: argparse.ArgumentParser) -> None:
@@ -155,30 +158,34 @@ def _check_dependencies(provider: str) -> bool:
 
 
 def _print_cli_summary(stats: OverallStats) -> None:
-    log = logging.getLogger("mod_translator")
-    log.info("=" * 50)
-    log.info("  Translation Complete — %d mods processed", stats.total_mods)
-    log.info("")
-    log.info("  %-30s %8s %7s %8s", "Mod", "Entries", "Files", "Time")
-    log.info("  " + "-" * 55)
+    logger.info("=" * 50)
+    logger.info("  Translation Complete — %d mods processed", stats.total_mods)
+    logger.info("")
+    logger.info("  %-30s %8s %7s %8s", "Mod", "Entries", "Files", "Time")
+    logger.info("  " + "-" * 55)
     for m in stats.mods:
         status = " SKIPPED" if m.skipped else ""
         time_s = f"{m.duration_ms / 1000:.1f}s"
-        log.info("  %-30s %8d %7d %8s%s", m.name[:30], m.total_entries, len(m.files), time_s, status)
-    log.info("  " + "-" * 55)
+        logger.info("  %-30s %8d %7d %8s%s", m.name[:30], m.total_entries, len(m.files), time_s, status)
+    logger.info("  " + "-" * 55)
     total_time = f"{stats.total_duration_ms / 1000:.1f}s"
-    log.info("  %-30s %8d %7d %8s", "TOTAL", stats.total_entries, sum(len(m.files) for m in stats.mods), total_time)
-    log.info("")
-    log.info("  Provider: %s", stats.provider)
-    log.info("  Source → Target: %s → %s", stats.source_lang, stats.target_lang)
+    logger.info("  %-30s %8d %7d %8s", "TOTAL", stats.total_entries, sum(len(m.files) for m in stats.mods), total_time)
+    logger.info("")
+    logger.info("  Provider: %s", stats.provider)
+    logger.info("  Source → Target: %s → %s", stats.source_lang, stats.target_lang)
     if stats.failed_entries > 0:
-        log.warning("  Failed: %d entries", stats.failed_entries)
+        logger.warning("  Failed: %d entries", stats.failed_entries)
     else:
-        log.info("  Failed: 0 entries")
-    log.info("=" * 50)
+        logger.info("  Failed: 0 entries")
+    logger.info("=" * 50)
 
 
-def handle_translate_command(args: argparse.Namespace) -> None:
+def handle_translate_command(
+    args: argparse.Namespace,
+    *,
+    return_stats: bool = False,
+    reporter: ProgressReporter | None = None,
+) -> OverallStats | None:
     try:
         provider = getattr(args, "provider", "google")
         if getattr(args, "ai", False):
@@ -186,12 +193,13 @@ def handle_translate_command(args: argparse.Namespace) -> None:
             provider = "openai"
 
         if not _check_dependencies(provider):
-            return
+            return None
 
-        debug = getattr(args, "debug", False)
-        setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
+        if not _is_logging_configured():
+            debug = getattr(args, "debug", False)
+            setup_logging(console_level="DEBUG" if debug else "INFO")
 
-        reporter = ProgressReporter()
+        reporter = reporter or ProgressReporter()
 
         args.provider = provider
         config_data = None
@@ -225,7 +233,7 @@ def handle_translate_command(args: argparse.Namespace) -> None:
             if selected_count == 0:
                 logger.info("No mods to translate in dry run.")
                 logger.info("--- DRY RUN COMPLETE (no files modified) ---")
-                return
+                return None
 
             logger.info("Would translate the following %d mod(s):", selected_count)
             for mod in mods:
@@ -233,11 +241,11 @@ def handle_translate_command(args: argparse.Namespace) -> None:
                     for f in mod.source_files:
                         logger.info("  - %s → %s", mod.name, f)
             logger.info("--- DRY RUN COMPLETE (no files modified) ---")
-            return
+            return None
 
         if selected_count == 0 and has_explicit_filter:
             logger.warning("No mods matched the selection criteria. Exiting.")
-            return
+            return None
 
         total_estimated_entries = sum(m.estimated_entries for m in mods if m.selected)
         logger.info(
@@ -285,6 +293,8 @@ def handle_translate_command(args: argparse.Namespace) -> None:
                 json.dump(file_manager.overall_stats.to_dict(), fh, indent=2, ensure_ascii=False)
             logger.info("Stats exported to %s", export_path)
 
+        if return_stats:
+            return file_manager.overall_stats
         if file_manager.overall_stats:
             _print_cli_summary(file_manager.overall_stats)
         else:
@@ -298,3 +308,5 @@ def handle_translate_command(args: argparse.Namespace) -> None:
             pass
     except Exception as e:
         logger.exception("Error translating mods: %s", e)
+
+    return None

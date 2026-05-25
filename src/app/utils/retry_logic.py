@@ -5,14 +5,13 @@ This module provides robust retry mechanisms with exponential backoff
 to handle rate limits from Google Translate and OpenAI APIs.
 """
 
-import logging
 import random
 import time
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-logger = logging.getLogger("mod_translator")
+from loguru import logger
 
 # Standard error types that indicate rate limiting
 RATE_LIMIT_ERRORS = [

@@ -1,11 +1,10 @@
 import json
-import logging
 import os
 
-from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
-from .base_translator import BaseTranslatorService, make_chunk_system_prompt, make_system_prompt
+from loguru import logger
 
-logger = logging.getLogger("mod_translator")
+from .base_translator import BaseTranslatorService, make_chunk_system_prompt, make_system_prompt
+from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
 
 
 class OpenAIService(BaseTranslatorService):

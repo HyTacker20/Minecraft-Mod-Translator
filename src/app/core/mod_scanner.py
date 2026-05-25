@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import fnmatch
 import json
-import logging
+import os
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..utils.progress import ProgressReporter
+from loguru import logger
 
-logger = logging.getLogger("mod_translator")
+from ..utils.progress import ProgressReporter
 
 JAR = ".jar"
 JSON = ".json"

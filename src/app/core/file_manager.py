@@ -1,17 +1,16 @@
 import json
-import logging
 import os
 import shutil
 import zipfile
 from zipfile import ZIP_DEFLATED, ZipFile
+
+from loguru import logger
 
 from ..parsers import json_parser, lang_parser, mcfunction_parser
 from ..utils.progress import ProgressReporter
 from ..utils.stats import FileStats, ModStats, OverallStats
 from .settings import Settings
 from .translator import Translator
-
-logger = logging.getLogger("mod_translator")
 
 JAR = ".jar"
 JSON = ".json"

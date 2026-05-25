@@ -4,12 +4,12 @@ This module provides a user-friendly form-based terminal interface.
 """
 
 import argparse
-import logging
 import os
 import sys
 from typing import Any
 
 import questionary
+from loguru import logger
 from pyfiglet import Figlet
 from rich import box
 from rich.align import Align
@@ -28,16 +28,20 @@ from ..core.mod_scanner import ModInfo, ModScanner
 from ..core.provider_check import check_provider_available
 from ..logging_config import setup_logging
 from ..utils.progress import ProgressReporter
+from ..utils.stats import OverallStats
 
 UI_THEME = Theme(
     {
         "primary": "white",
         "secondary": "bright_black",
-        "accent": "red",
+        "accent": "bright_green",
+        "success": "bold green",
         "warning": "bold red",
         "error": "bold red",
     }
 )
+
+
 
 QUESTIONARY_STYLE = questionary.Style(
     [
@@ -416,10 +420,63 @@ def select_mods(mods: list[ModInfo]) -> list[str]:
     return list(selected) if isinstance(selected, list) else []
 
 
+def _render_rich_summary(console: Console, stats: OverallStats, output_path: str) -> None:
+    table = Table(title=None, box=box.SIMPLE, header_style="bold")
+    table.add_column("Mod", style="white", no_wrap=True)
+    table.add_column("Entries", justify="right", style="bright_black")
+    table.add_column("Files", justify="right", style="bright_black")
+    table.add_column("Time", justify="right", style="bright_black")
+
+    for m in stats.mods:
+        status = " [SKIPPED]" if m.skipped else ""
+        time_s = f"{m.duration_ms / 1000:.1f}s"
+        table.add_row(m.name[:35] + status, str(m.total_entries), str(len(m.files)), time_s)
+
+    table.add_section()
+    total_time = f"{stats.total_duration_ms / 1000:.1f}s"
+    table.add_row(
+        "TOTAL",
+        str(stats.total_entries),
+        str(sum(len(m.files) for m in stats.mods)),
+        total_time,
+        style="bold",
+    )
+
+    provider_text = Text.assemble(
+        ("  Provider: ", "bright_black"),
+        (stats.provider, "white"),
+        ("  |  ", "bright_black"),
+        ("Source → Target: ", "bright_black"),
+        (f"{stats.source_lang} → {stats.target_lang}", "white"),
+    )
+
+    fail_style = "bold yellow" if stats.failed_entries > 0 else "white"
+    fail_text = Text.assemble(
+        ("  Failed: ", "bright_black"),
+        (f"{stats.failed_entries} entries", fail_style),
+    )
+
+    console.print()
+    console.print(table)
+    console.print(provider_text)
+    console.print(fail_text)
+
+
 def run_translation(params: dict[str, Any], selected_mods: list[str]) -> None:
+    live_log_lines: list[str] = []
+    console_handler_id: int | None = None
+    live_sink_id: int | None = None
+
     try:
-        debug = params.pop("debug", False)
-        setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
+        debug = params.get("debug", False)
+        console_level = "DEBUG" if debug else "INFO"
+        setup_logging(console_level=console_level)
+
+        console_handler_id = None
+        for hid, handler in logger._core.handlers.items():  # type: ignore[attr-defined]
+            if getattr(handler, "_sink", None) is sys.stderr:
+                console_handler_id = hid
+                break
 
         class Args(argparse.Namespace):
             def __init__(self, **kwargs: Any):
@@ -427,13 +484,6 @@ def run_translation(params: dict[str, Any], selected_mods: list[str]) -> None:
                     setattr(self, key, value)
 
         args = Args(**params)
-
-        progress_table = Table.grid()
-        progress_table.add_column()
-        progress_table.add_column()
-
-        inner_table = Table.grid()
-        inner_table.add_column()
 
         reporter = ProgressReporter()
         live_stats: dict[str, Any] = {
@@ -479,15 +529,16 @@ def run_translation(params: dict[str, Any], selected_mods: list[str]) -> None:
             elif "Translating" in live_stats["phase"] or live_stats["mod_name"]:
                 phase_color = "bold red"
 
-            t.add_row(Text(f"[{phase_color}]{live_stats['phase']}[/{phase_color}]"))
+            t.add_row(Text(live_stats["phase"], style=phase_color))
 
             if live_stats["mod_name"]:
-                t.add_row(Text(f"  Mod: [white]{live_stats['mod_name']}[/white]"))
+                t.add_row(Text("  Mod: ", style="white")
+                          + Text(live_stats["mod_name"], style="white"))
             if live_stats["file_path"]:
                 short_path = live_stats["file_path"]
                 if len(short_path) > 60:
                     short_path = "..." + short_path[-57:]
-                t.add_row(Text(f"  File: [bright_black]{short_path}[/bright_black]"))
+                t.add_row(Text(f"  File: {short_path}", style="bright_black"))
 
             mod_progress = f"Mod {live_stats['mods_done']}/{live_stats['mods_total']}"
             entry_progress = f"Entries {live_stats['entries_done']}/{live_stats['entries_total']}"
@@ -500,22 +551,54 @@ def run_translation(params: dict[str, Any], selected_mods: list[str]) -> None:
             if live_stats["mods_total"] > 0:
                 t.add_row(Text(f"  {mod_progress}", style="bright_black"))
 
+            if live_log_lines:
+                t.add_row(Text("─" * 40, style="bright_black"))
+                for line in live_log_lines:
+                    t.add_row(Text(f"  {line}", style="bright_black", overflow="crop"))
+
             return t
 
         live = Live(_build_progress_renderable(), console=console, refresh_per_second=4, transient=False)
 
-        with live:
-            reporter.report_title("Starting translation...")
+        if console_handler_id is not None:
+            logger.remove(console_handler_id)
 
-            try:
-                handle_translate_command(args)
-            except KeyboardInterrupt:
-                sys.exit(0)
+        def _live_sink(message: Any) -> None:
+            line = str(message).rstrip("\n")
+            live_log_lines.append(line)
+            if len(live_log_lines) > 3:
+                live_log_lines.pop(0)
 
-        success_message = "[bold]Translation completed successfully![/bold]\n"
-        success_message += f"Translated mods can be found at: [white]{params['output']}[/white]"
+        live_sink_id = logger.add(_live_sink, level=console_level, format="{time:HH:mm:ss} {message}")
 
-        console.print(Panel(success_message, title="Success", border_style="red", title_align="center", box=box.DOUBLE))
+        try:
+            with live:
+                reporter.report_title("Starting translation...")
+
+                try:
+                    stats = handle_translate_command(args, return_stats=True, reporter=reporter)
+                except KeyboardInterrupt:
+                    sys.exit(0)
+
+            if stats:
+                _render_rich_summary(console, stats, params.get("output", "./translated_mods"))
+
+            success_message = "[bold]Translation completed successfully![/bold]\n"
+            success_message += f"Translated mods can be found at: [white]{params['output']}[/white]"
+
+            console.print(
+                Panel(success_message, title="Success", border_style="green", title_align="center", box=box.DOUBLE)
+            )
+
+        finally:
+            if live_sink_id is not None:
+                logger.remove(live_sink_id)
+            logger.add(
+                sys.stderr,
+                level=console_level,
+                format="{time:HH:mm:ss} | {level: <8} | {message}",
+                colorize=True,
+            )
 
     except KeyboardInterrupt:
         sys.exit(0)

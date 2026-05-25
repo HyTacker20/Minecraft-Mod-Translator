@@ -1,12 +1,10 @@
-import logging
+from loguru import logger
 
 from .base_translator import BaseTranslatorService
 from .google_service import GoogleService
 from .litellm_service import LitellmService
 from .openai_compatible_service import OpenAICompatibleService
 from .openai_service import OpenAIService
-
-logger = logging.getLogger("mod_translator")
 
 AI_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "ollama", "litellm", "openaicompatible"})
 ALL_PROVIDERS = frozenset({"google", "openai", "anthropic", "gemini", "ollama", "litellm", "openaicompatible"})

@@ -1,10 +1,9 @@
 import json
-import logging
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-logger = logging.getLogger("mod_translator")
+from loguru import logger
 
 TRANSLATION_SYSTEM_PROMPT = """You are a professional translator specializing in video game localization.
 Translate from {source_lang} to {target_lang}.

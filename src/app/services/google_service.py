@@ -1,11 +1,9 @@
-import logging
+from loguru import logger
 
 from deep_translator import GoogleTranslator
 
-from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
 from .base_translator import BaseTranslatorService
-
-logger = logging.getLogger("mod_translator")
+from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
 
 
 class GoogleService(BaseTranslatorService):

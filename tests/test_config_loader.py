@@ -86,14 +86,19 @@ class TestLoadConfig:
         assert result["workers"] == 10
         assert isinstance(result["workers"], int)
 
-    def test_unknown_keys_warned_and_skipped(self, tmp_path: Path, caplog):
+    def test_unknown_keys_warned_and_skipped(self, tmp_path: Path):
         config = tmp_path / "translator.toml"
         config.write_text('[translation]\nsource = "uk_UA"\nfoo = "bar"\n', encoding="utf-8")
-        import logging
-        caplog.set_level(logging.WARNING)
+
+        from loguru import logger
+        captured: list[str] = []
+        sink_id = logger.add(lambda msg: captured.append(str(msg).strip()), level="WARNING", format="{message}")
+
         result = load_config(config)
+        logger.remove(sink_id)
+
         assert result == {"source": "uk_UA"}
-        assert "Unknown config key" in caplog.text
+        assert any("Unknown config key" in m for m in captured)
 
     def test_empty_config(self, tmp_path: Path):
         config = tmp_path / "translator.toml"
@@ -107,14 +112,19 @@ class TestLoadConfig:
         result = load_config(config)
         assert result == {}
 
-    def test_workers_wrong_type_warns(self, tmp_path: Path, caplog):
+    def test_workers_wrong_type_warns(self, tmp_path: Path):
         config = tmp_path / "translator.toml"
         config.write_text('[translation]\nworkers = "ten"\n', encoding="utf-8")
-        import logging
-        caplog.set_level(logging.WARNING)
+
+        from loguru import logger
+        captured: list[str] = []
+        sink_id = logger.add(lambda msg: captured.append(str(msg).strip()), level="WARNING", format="{message}")
+
         result = load_config(config)
+        logger.remove(sink_id)
+
         assert "workers" not in result
-        assert "must be an integer" in caplog.text
+        assert any("must be an integer" in m for m in captured)
 
 
 class TestGenerateConfigTemplate:

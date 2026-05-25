@@ -2,13 +2,12 @@
 Main command-line interface for Mod Translator.
 """
 
-import logging
 import sys
 from argparse import ArgumentParser
 
-from ..commands.translate import add_translate_arguments, handle_translate_command
+from loguru import logger
 
-logger = logging.getLogger("mod_translator")
+from ..commands.translate import add_translate_arguments, handle_translate_command
 
 
 def build_argument_parser() -> ArgumentParser:

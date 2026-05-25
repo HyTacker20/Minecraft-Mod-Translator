@@ -1,8 +1,6 @@
-import logging
+from loguru import logger
 
 from ..services.factory import get_translator_service
-
-logger = logging.getLogger("mod_translator")
 
 
 class Translator:

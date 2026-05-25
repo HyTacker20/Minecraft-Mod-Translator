@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
-    import tomli as tomllib
-
-logger = logging.getLogger("mod_translator")
+    import tomli as tomllib  # type: ignore[no-redef]
 
 CONFIG_FILE_NAME = "translator.toml"
 HIDDEN_CONFIG_FILE_NAME = ".translator.toml"

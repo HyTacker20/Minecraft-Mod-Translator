@@ -1,7 +1,4 @@
-import logging
 import os
-
-logger = logging.getLogger("mod_translator")
 
 
 def check_provider_available(provider: str) -> tuple[bool, str]:
