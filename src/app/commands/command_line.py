@@ -29,7 +29,7 @@ def build_argument_parser() -> ArgumentParser:
 
     # Create the app command
     app_parser = subparsers.add_parser("app", help="Launch interactive form interface")
-    # No arguments needed for the app interface
+    app_parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging to console")
 
     # For backward compatibility, also add translate arguments to the main parser
     add_translate_arguments(parser)
@@ -53,7 +53,8 @@ def main() -> None:
         if getattr(args, "command", None) == "app":
             # Import app module here to avoid circular imports
             from ..commands.app import main as app_main
-            app_main()
+            debug = getattr(args, "debug", False)
+            app_main(debug=debug)
         else:
             # Default to translate command for backward compatibility
             handle_translate_command(args)

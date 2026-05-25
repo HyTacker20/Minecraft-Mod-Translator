@@ -3,12 +3,13 @@ import logging
 from .base_translator import BaseTranslatorService
 from .google_service import GoogleService
 from .litellm_service import LitellmService
+from .openai_compatible_service import OpenAICompatibleService
 from .openai_service import OpenAIService
 
 logger = logging.getLogger("mod_translator")
 
-AI_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "ollama", "litellm"})
-ALL_PROVIDERS = frozenset({"google", "openai", "anthropic", "gemini", "ollama", "litellm"})
+AI_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "ollama", "litellm", "openaicompatible"})
+ALL_PROVIDERS = frozenset({"google", "openai", "anthropic", "gemini", "ollama", "litellm", "openaicompatible"})
 
 
 def get_translator_service(
@@ -48,6 +49,15 @@ def get_translator_service(
                 model=model,
                 provider="openai",
             )
+
+    if provider_lower == "openaicompatible":
+        return OpenAICompatibleService(
+            source_lang=source_lang,
+            target_lang=target_lang,
+            capitalize=capitalize,
+            max_retries=max_retries,
+            model=model,
+        )
 
     if provider_lower in AI_PROVIDERS:
         return LitellmService(

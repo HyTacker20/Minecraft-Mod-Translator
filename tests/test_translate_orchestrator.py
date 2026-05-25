@@ -44,11 +44,21 @@ class TestCheckDependencies:
                 assert result is False
 
     def test_check_dependencies_openai_not_installed(self):
-        with patch.dict("sys.modules", {}, clear=True):
-            if "litellm" in __import__("sys").modules:
-                pass
-            result = _check_dependencies(provider="openai")
-            assert result is False
+        import builtins
+
+        _orig = builtins.__import__
+
+        def _blocked(name, *a, **kw):
+            if name in ("openai", "litellm"):
+                raise ImportError(name)
+            return _orig(name, *a, **kw)
+
+        with patch.dict(os.environ, {}, clear=True):
+            if "OPENAI_API_KEY" in os.environ:
+                del os.environ["OPENAI_API_KEY"]
+            with patch("builtins.__import__", _blocked):
+                result = _check_dependencies(provider="openai")
+                assert result is False
 
 
 class TestTranslateOrchestrator:

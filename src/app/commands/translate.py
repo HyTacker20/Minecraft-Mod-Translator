@@ -9,6 +9,7 @@ import zipfile
 
 from ..core.file_manager import FileManager
 from ..core.settings import Settings
+from ..logging_config import setup_logging
 
 logger = logging.getLogger("mod_translator")
 
@@ -24,7 +25,7 @@ def add_translate_arguments(parser: argparse.ArgumentParser) -> None:
         "--provider",
         type=str,
         default="google",
-        choices=["google", "openai", "anthropic", "gemini", "ollama", "litellm"],
+        choices=["google", "openai", "anthropic", "gemini", "ollama", "litellm", "openaicompatible"],
         help="Translation provider (default: google)",
     )
     parser.add_argument(
@@ -34,6 +35,7 @@ def add_translate_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--workers", type=int, default=4, help="Number of concurrent translation workers (default: 4)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated without making changes")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging to console")
 
 
 def _check_dependencies(provider: str) -> bool:
@@ -71,6 +73,26 @@ def _check_dependencies(provider: str) -> bool:
         logger.info("OpenAI API key configured")
         return True
 
+    if provider == "openaicompatible":
+        try:
+            import openai  # noqa: F401
+        except ImportError:
+            logger.error(
+                "OpenAI package is required for OpenAI-Compatible provider. "
+                "Install with: pip install openai"
+            )
+            return False
+        api_key = os.getenv("OPENAICOMPATIBLE_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAICOMPATIBLE_API_KEY environment variable not set.")
+            return False
+        base_url = os.getenv("OPENAICOMPATIBLE_BASE_URL")
+        if not base_url:
+            logger.error("OPENAICOMPATIBLE_BASE_URL environment variable not set.")
+            return False
+        logger.info("OpenAI-Compatible API configured (base_url: %s)", base_url)
+        return True
+
     try:
         import litellm  # noqa: F401
     except ImportError:
@@ -106,6 +128,9 @@ def handle_translate_command(args: argparse.Namespace) -> None:
 
         if not _check_dependencies(provider):
             return
+
+        debug = getattr(args, "debug", False)
+        setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
 
         args.provider = provider
         settings = Settings(cli_args=args)

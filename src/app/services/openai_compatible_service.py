@@ -7,17 +7,10 @@ from .base_translator import BaseTranslatorService, make_chunk_system_prompt, ma
 
 logger = logging.getLogger("mod_translator")
 
-DEFAULT_TRANSLATION_MODEL = "gpt-4o-mini"
-
-PROVIDER_DEFAULTS: dict[str, str] = {
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-3-haiku-20240307",
-    "gemini": "gemini/gemini-1.5-flash",
-    "ollama": "ollama/llama3",
-}
+DEFAULT_MODEL = "gpt-4o-mini"
 
 
-class LitellmService(BaseTranslatorService):
+class OpenAICompatibleService(BaseTranslatorService):
     _CHUNK_SIZE = 25
 
     def __init__(
@@ -27,11 +20,9 @@ class LitellmService(BaseTranslatorService):
         capitalize: bool = True,
         max_retries: int = 3,
         model: str | None = None,
-        provider: str = "litellm",
     ) -> None:
         super().__init__(source_lang, target_lang, capitalize)
-        self._retry = create_retry_decorator("litellm", max_retries=max_retries)
-        self._provider = provider
+        self._retry = create_retry_decorator("openaicompatible", max_retries=max_retries)
 
         try:
             from dotenv import load_dotenv
@@ -40,12 +31,24 @@ class LitellmService(BaseTranslatorService):
         except ImportError:
             pass
 
-        from litellm import completion
-        self._completion = completion
+        self._api_key = os.getenv("OPENAICOMPATIBLE_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not self._api_key:
+            raise ValueError(
+                "OPENAICOMPATIBLE_API_KEY environment variable not set.\n"
+                "Please set OPENAICOMPATIBLE_API_KEY in a .env file or environment variable."
+            )
 
-        resolved = model or os.getenv("TRANSLATION_MODEL") or PROVIDER_DEFAULTS.get(provider, DEFAULT_TRANSLATION_MODEL)
-        self._model = resolved
-        logger.info("LiteLLM initialized with model: %s", self._model)
+        self._base_url = os.getenv("OPENAICOMPATIBLE_BASE_URL")
+        if not self._base_url:
+            raise ValueError(
+                "OPENAICOMPATIBLE_BASE_URL environment variable not set.\n"
+                "Please set OPENAICOMPATIBLE_BASE_URL in a .env file or environment variable."
+            )
+
+        from openai import OpenAI
+        self._client = OpenAI(api_key=self._api_key, base_url=self._base_url)
+        self._model = model or os.getenv("OPENAICOMPATIBLE_MODEL") or os.getenv("TRANSLATION_MODEL") or DEFAULT_MODEL
+        logger.info("OpenAICompatibleService initialized with model: %s, base_url: %s", self._model, self._base_url)
 
     def _translate_chunk(self, chunk: list[tuple[str, str]]) -> dict[str, str]:
         if not chunk:
@@ -62,11 +65,11 @@ class LitellmService(BaseTranslatorService):
 
         @self._retry
         def _do_translate(payload: str) -> str:
-            global_rate_limiter.apply_service_delay("litellm")
+            global_rate_limiter.apply_service_delay("openaicompatible")
 
             system_prompt = make_chunk_system_prompt(self.source_lang, self.target_lang)
 
-            response = self._completion(
+            completion = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -88,7 +91,7 @@ class LitellmService(BaseTranslatorService):
 
             return result
         except Exception as e:
-            logger.warning("LiteLLM chunk translation failed: %s", e)
+            logger.warning("OpenAICompatibleService chunk translation failed: %s", e)
             return {key: text for key, text in chunk}
 
     def translate(self, text: str) -> str:
@@ -97,11 +100,11 @@ class LitellmService(BaseTranslatorService):
 
         @self._retry
         def _do_translate(t: str) -> str:
-            global_rate_limiter.apply_service_delay("litellm")
+            global_rate_limiter.apply_service_delay("openaicompatible")
 
             system_prompt = make_system_prompt(self.source_lang, self.target_lang)
 
-            response = self._completion(
+            completion = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -111,7 +114,7 @@ class LitellmService(BaseTranslatorService):
                 max_tokens=500,
             )
 
-            translated_text = response.choices[0].message.content.strip()
+            translated_text = completion.choices[0].message.content.strip()
 
             if self.capitalize and translated_text:
                 translated_text = translated_text.capitalize()
@@ -121,5 +124,5 @@ class LitellmService(BaseTranslatorService):
         try:
             return _do_translate(text)
         except Exception as e:
-            logger.warning("LiteLLM translation failed for '%s': %s", text, e)
+            logger.warning("OpenAICompatibleService translation failed for '%s': %s", text, e)
             return text

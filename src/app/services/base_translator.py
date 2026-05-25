@@ -62,11 +62,21 @@ class BaseTranslatorService(ABC):
 
     def _parse_chunk_response(self, response: str, chunk: list[tuple[str, str]]) -> dict[str, str]:
         response = response.strip()
+        logger.debug(
+            "_parse_chunk_response: raw response (len=%d, keys=%d): %s",
+            len(response),
+            len(chunk),
+            response[:1500],
+        )
+
+        # Remove markdown code fences (including language tags like ```json)
         if response.startswith("```"):
             lines = response.split("\n")
-            response = "\n".join(lines[1:]) if lines[0].startswith("```") else response
-            if response.endswith("```"):
-                response = response[:-3].strip()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]  # Strip opening fence line
+            if lines and lines[-1].strip() in ("```", "``` "):
+                lines = lines[:-1]  # Strip closing fence line
+            response = "\n".join(lines).strip()
 
         try:
             parsed = json.loads(response)
@@ -75,8 +85,12 @@ class BaseTranslatorService(ABC):
                 if self.capitalize:
                     return {k: v.capitalize() if isinstance(v, str) and v else v for k, v in parsed_dict.items()}
                 return parsed_dict
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse chunk response as JSON, falling back to per-item")
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "Failed to parse chunk response as JSON (error: %s, response head: %s), falling back to per-item",
+                e,
+                response[:300],
+            )
             result: dict[str, str] = {}
             for key, text in chunk:
                 try:

@@ -232,6 +232,7 @@ def get_user_input() -> dict[str, Any]:
             ("anthropic", "Anthropic Claude", "ANTHROPIC_API_KEY"),
             ("gemini", "Google Gemini", "GEMINI_API_KEY"),
             ("ollama", "Ollama (Local)", "OLLAMA_API_BASE"),
+            ("openaicompatible", "OpenAI-Compatible (Custom)", "OPENAICOMPATIBLE_API_KEY + BASE_URL"),
         ]
 
         translation_choices = []
@@ -263,8 +264,6 @@ def get_user_input() -> dict[str, Any]:
             _, status = check_provider_available(provider_name)
             console.print(f"\n[bold yellow]{provider_name.capitalize()} Setup Required[/bold yellow]")
             console.print(f"Status: {status}")
-            console.print("Install dependencies: [cyan]pip install litellm python-dotenv[/cyan]")
-            console.print("Set your API key in a .env file or environment variable.")
             console.print("\nFalling back to Google Translate...\n")
             translation_method = "google"
 
@@ -344,7 +343,8 @@ def get_user_input() -> dict[str, Any]:
 
 def run_translation(params: dict[str, Any]) -> None:
     try:
-        setup_logging(console_level=logging.INFO)
+        debug = params.pop("debug", False)
+        setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
 
         class Args(argparse.Namespace):
             def __init__(self, **kwargs: Any):
@@ -398,7 +398,7 @@ def _handle_progress_event(event: str, progress: Progress, task, **kwargs) -> No
     elif event == "progress":
         progress.update(task, total=kwargs["total"], completed=kwargs["current"])
 
-def main() -> None:
+def main(debug: bool = False) -> None:
     """Main entry point for the console app."""
     try:
         display_title()
@@ -436,6 +436,7 @@ def main() -> None:
                 input("Press Enter to exit...")
                 return
 
+        params["debug"] = debug
         run_translation(params)
 
         # Add pause before closing (especially useful for compiled executable)

@@ -70,10 +70,20 @@ class TestProviderCheck:
             assert available is True
 
     def test_litellm_not_installed(self):
-        with patch.dict("sys.modules", {}, clear=True):
-            if "litellm" in __import__("sys").modules:
-                pass
-            with patch.dict("sys.modules"):
+        import builtins
+
+        with patch.dict(os.environ, {}, clear=True):
+            if "OPENAI_API_KEY" in os.environ:
+                del os.environ["OPENAI_API_KEY"]
+
+            _orig = builtins.__import__
+
+            def _blocked(name, *a, **kw):
+                if name in ("openai", "litellm"):
+                    raise ImportError(name)
+                return _orig(name, *a, **kw)
+
+            with patch("builtins.__import__", _blocked):
                 available, msg = check_provider_available("openai")
                 assert available is False
                 assert "not installed" in msg
