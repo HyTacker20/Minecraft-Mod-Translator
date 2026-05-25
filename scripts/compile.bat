@@ -110,6 +110,18 @@ pyinstaller --onefile ^
     --hidden-import "app.commands.command_line" ^
     --hidden-import "app.commands.app" ^
     --hidden-import "app.commands.translate" ^
+    --hidden-import "app.core" ^
+    --hidden-import "app.core.settings" ^
+    --hidden-import "app.core.translator" ^
+    --hidden-import "app.core.file_manager" ^
+    --hidden-import "app.parsers" ^
+    --hidden-import "app.parsers.json_parser" ^
+    --hidden-import "app.parsers.lang_parser" ^
+    --hidden-import "app.parsers.mcfunction_parser" ^
+    --hidden-import "app.services" ^
+    --hidden-import "app.services.google_translate" ^
+    --hidden-import "app.services.openai_translate" ^
+    --hidden-import "app.data" ^
     --hidden-import "deep_translator" ^
     --hidden-import "rich" ^
     --hidden-import "questionary" ^
@@ -155,6 +167,18 @@ pyinstaller --onefile ^
     --hidden-import "app.commands.command_line" ^
     --hidden-import "app.commands.app" ^
     --hidden-import "app.commands.translate" ^
+    --hidden-import "app.core" ^
+    --hidden-import "app.core.settings" ^
+    --hidden-import "app.core.translator" ^
+    --hidden-import "app.core.file_manager" ^
+    --hidden-import "app.parsers" ^
+    --hidden-import "app.parsers.json_parser" ^
+    --hidden-import "app.parsers.lang_parser" ^
+    --hidden-import "app.parsers.mcfunction_parser" ^
+    --hidden-import "app.services" ^
+    --hidden-import "app.services.google_translate" ^
+    --hidden-import "app.services.openai_translate" ^
+    --hidden-import "app.data" ^
     --hidden-import "deep_translator" ^
     --hidden-import "rich" ^
     --hidden-import "questionary" ^
