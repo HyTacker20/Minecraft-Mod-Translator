@@ -136,13 +136,13 @@ class TestTranslationRateLimiter:
 
     def test_apply_service_delay_no_need(self):
         limiter = TranslationRateLimiter()
-        limiter.google_tracker.consecutive_rate_limits = 0
+        limiter.get_tracker("google").consecutive_rate_limits = 0
         limiter.apply_service_delay("google")
 
     def test_apply_service_delay_with_preventive(self):
         limiter = TranslationRateLimiter()
-        limiter.google_tracker.consecutive_rate_limits = 1
-        limiter.google_tracker.last_rate_limit_time = time.time()
+        limiter.get_tracker("google").consecutive_rate_limits = 1
+        limiter.get_tracker("google").last_rate_limit_time = time.time()
         limiter.apply_service_delay("google")
 
     def test_preventive_delay_after_rate_limit(self):

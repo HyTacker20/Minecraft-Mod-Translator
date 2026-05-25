@@ -194,18 +194,14 @@ class TranslationRateLimiter:
     """
 
     def __init__(self):
-        self.google_tracker = RateLimitTracker()
-        self.openai_tracker = RateLimitTracker()
+        self._trackers: dict[str, RateLimitTracker] = {}
 
     def get_tracker(self, service: str) -> RateLimitTracker:
         """Get the appropriate rate limit tracker for a service."""
-        if service.lower() == 'openai':
-            return self.openai_tracker
-        elif service.lower() == 'google':
-            return self.google_tracker
-        else:
-            # Default tracker for unknown services
-            return RateLimitTracker()
+        key = service.lower()
+        if key not in self._trackers:
+            self._trackers[key] = RateLimitTracker()
+        return self._trackers[key]
 
     def apply_service_delay(self, service: str):
         """Apply any necessary preventive delays for a service."""
@@ -221,18 +217,32 @@ class TranslationRateLimiter:
 global_rate_limiter = TranslationRateLimiter()
 
 
+try:
+    from litellm import exceptions as litellm_exceptions
+    LITELLM_RETRY_EXCEPTIONS = (
+        litellm_exceptions.RateLimitError,
+        litellm_exceptions.APIError,
+        litellm_exceptions.ServiceUnavailableError,
+    )
+except ImportError:
+    LITELLM_RETRY_EXCEPTIONS = ()
+
+
 def create_retry_decorator(service: str, max_retries: int = 3):
     """
     Create a retry decorator configured for a specific translation service.
     
     Args:
-        service: Service name ('google' or 'openai')
+        service: Service name ('google', 'openai', 'litellm', etc.)
         max_retries: Maximum number of retry attempts
     """
     tracker = global_rate_limiter.get_tracker(service)
 
-    if service.lower() == 'openai' and OPENAI_RETRY_EXCEPTIONS:
-        exceptions = OPENAI_RETRY_EXCEPTIONS
+    key = service.lower()
+    if key == 'openai' and OPENAI_RETRY_EXCEPTIONS:
+        exceptions: type[Exception] | tuple[type[Exception], ...] = OPENAI_RETRY_EXCEPTIONS
+    elif key == 'litellm' and LITELLM_RETRY_EXCEPTIONS:
+        exceptions = LITELLM_RETRY_EXCEPTIONS
     else:
         exceptions = Exception
 
