@@ -14,11 +14,22 @@
 ## Можливості
 
 - **Автоматичний переклад** — швидкий переклад файлів модів на різні мови
-- **AI-переклад** — інтеграція з OpenAI для перекладів вищої якості
+- **AI-переклад** — декілька AI-провайдерів для перекладів вищої якості
 - **Підтримка форматів** — сумісність з JSON, LANG та MCFUNCTION файлами
-- **Декілька сервісів перекладу** — Google Translate (безкоштовно) та OpenAI (потрібен API ключ)
+- **Декілька сервісів перекладу** — Google Translate (безкоштовно) та AI-провайдери (OpenAI, Anthropic, Gemini, Ollama, OpenAI-сумісні)
 - **Пакетна обробка** — переклад окремих файлів або цілих тек модів
 - **Розумне визначення тексту** — автоматично визначає контент для перекладу, зберігаючи ігрову логіку
+
+## Провайдери перекладу
+
+| Провайдер | Прапорець | Вартість | Вимоги |
+|---|---|---|---|
+| Google Translate | `--provider google` | Безкоштовно | Пакет `deep-translator` |
+| OpenAI | `--provider openai` | Платний | `OPENAI_API_KEY` |
+| Anthropic Claude | `--provider anthropic` | Платний | `ANTHROPIC_API_KEY` |
+| Google Gemini | `--provider gemini` | Платний/Безкоштовний | `GEMINI_API_KEY` |
+| Ollama (Локальний) | `--provider ollama` | Безкоштовно | Ollama запущено локально |
+| OpenAI-Сумісний | `--provider openaicompatible` | Залежить | `OPENAICOMPATIBLE_API_KEY` + `OPENAICOMPATIBLE_BASE_URL` |
 
 ## Встановлення
 
@@ -34,24 +45,45 @@
 ### З вихідного коду
 
 ```bash
+# Спочатку встановіть uv (https://docs.astral.sh/uv/getting-started/installation/)
 git clone https://github.com/zvictorium/minecraft-mod-translator.git
 cd minecraft-mod-translator
 
 # Налаштування середовища (Windows)
-setup.bat
+scripts\setup.bat
 # Або для Linux/Mac
-./setup.sh
+./scripts/setup.sh
 
 # Для підтримки AI-перекладу встановіть додаткові залежності:
-pip install openai python-dotenv
-# Або встановіть все одразу:
-pip install -e .[ai]
+uv sync --extra ai
 
 # Запуск застосунку (Windows)
-start.bat
+scripts\start.bat
 # Або для Linux/Mac
-./start.sh
+./scripts/start.sh
 ```
+
+## Конфігурація
+
+Скопіюйте `.env.example` у `.env` та налаштуйте API ключі:
+
+```bash
+cp .env.example .env
+```
+
+Підтримувані змінні середовища:
+
+| Змінна | Провайдер | Обов'язково | За замовчуванням |
+|---|---|---|---|
+| `TRANSLATION_MODEL` | Усі AI | Ні | `gpt-4o-mini` |
+| `OPENAI_API_KEY` | openai | Так | — |
+| `OPENAI_MODEL` | openai | Ні | `gpt-3.5-turbo` |
+| `ANTHROPIC_API_KEY` | anthropic | Так | — |
+| `GEMINI_API_KEY` | gemini | Так | — |
+| `OLLAMA_API_BASE` | ollama | Ні | `http://localhost:11434` |
+| `OPENAICOMPATIBLE_API_KEY` | openaicompatible | Так | — |
+| `OPENAICOMPATIBLE_BASE_URL` | openaicompatible | Так | — |
+| `OPENAICOMPATIBLE_MODEL` | openaicompatible | Ні | `gpt-4o-mini` |
 
 ## Використання
 
@@ -65,40 +97,69 @@ mod-translator app
 
 ```bash
 # Базове використання з Google Translate (безкоштовно)
-mod-translator --path path/to/mods --source en_US --target uk_UA --output path/to/output
+mod-translator cli --path path/to/mods --source en_US --target uk_UA --output path/to/output
 
 # AI-переклад з OpenAI (потрібен API ключ)
-mod-translator --path path/to/mods --source en_US --target uk_UA --output path/to/output --ai
+mod-translator cli --path path/to/mods --source en_US --target uk_UA --output path/to/output --provider openai
+
+# Використання Anthropic Claude
+mod-translator cli --path path/to/mods --source en_US --target uk_UA --output path/to/output --provider anthropic
+
+# Використання Google Gemini
+mod-translator cli --path path/to/mods --source en_US --target uk_UA --output path/to/output --provider gemini
+
+# Використання локального Ollama
+mod-translator cli --path path/to/mods --source en_US --target uk_UA --output path/to/output --provider ollama
+
+# Попередній перегляд (dry-run)
+mod-translator cli --path path/to/mods --source en_US --target uk_UA --dry-run
 
 # Параметри:
 # --path (-p): Шлях до моду або теки з модами (за замовчуванням: ./mods)
 # --source (-s): Код вихідної мови (напр., en_US)
 # --target (-t): Код цільової мови (напр., uk_UA)
 # --output (-o): Шлях до вихідної теки (якщо збігається з текою модів, замінить оригінальні моди)
-# --ai: Використовувати переклад OpenAI замість Google Translate (потрібен OPENAI_API_KEY)
+# --provider: Провайдер перекладу (google, openai, anthropic, gemini, ollama, openaicompatible)
+# --workers: Кількість одночасних потоків перекладу (за замовчуванням: 4)
+# --dry-run: Показати, що буде перекладено, без внесення змін
+# --debug (-d): Увімкнути debug-логування
 ```
 
-## Налаштування AI-перекладу
+> Прапорець `--ai` застарілий. Використовуйте `--provider openai` натомість.
 
-Для використання перекладу на основі OpenAI:
+## Розробка
 
-1. Отримайте API ключ OpenAI на [OpenAI API](https://platform.openai.com/api-keys)
-2. Створіть файл `.env` у кореневій теці проекту:
+### Налаштування
 
-   ```
-   OPENAI_API_KEY=your_api_key_here
-   OPENAI_MODEL=gpt-3.5-turbo
-   ```
+```bash
+uv sync                # Встановити основні залежності
+uv sync --extra ai     # Встановити залежності AI-провайдерів
+uv sync --group dev    # Встановити інструменти розробки (pytest, ruff, mypy)
+```
 
-3. Встановіть залежності:
+### Команди
 
-   ```bash
-   pip install openai python-dotenv
-   ```
+```bash
+uv run pytest              # Запуск тестів
+uv run pytest --cov        # Запуск тестів з покриттям
+uv run ruff check .        # Лінтинг
+uv run ruff format .       # Форматування
+uv run mypy src/           # Перевірка типів
+```
 
-4. Використовуйте прапорець `--ai` під час запуску перекладу
+### Структура проекту
 
-> Переклад OpenAI забезпечує краще розуміння контексту та ігрової термінології, але потребує API ключа з витратами на використання.
+```
+src/app/
+  core/            Settings, Translator, FileManager, перевірки провайдерів
+  services/        Провайдери перекладу (Google, OpenAI, LiteLLM та ін.)
+  parsers/         Парсери файлів (JSON, LANG, MCFUNCTION)
+  commands/        CLI точки входу та TUI застосунок
+  utils/           Логіка повторів, обмеження запитів, звітування прогресу
+tests/             Набір тестів Pytest
+scripts/           Скрипти збірки та налаштування
+docs/              Логотип та скріншоти
+```
 
 ## Скріншоти
 

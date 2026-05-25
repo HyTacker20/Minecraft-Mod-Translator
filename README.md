@@ -14,11 +14,22 @@ A tool for translating Minecraft mods into multiple languages, automating the lo
 ## Features
 
 - **Automated Translation** — Translate mod files to multiple languages
-- **AI-Powered Translation** — OpenAI integration for higher quality translations
-- **Comprehensive File Support** — Compatible with JSON, LANG, and MCFUNCTION file formats
-- **Multiple Translation Services** — Google Translate (free) and OpenAI (API key required)
+- **AI-Powered Translation** — Multiple AI providers for higher quality translations
+- **Comprehensive File Support** — JSON, LANG, and MCFUNCTION file formats
+- **Multiple Translation Services** — Google Translate (free) and AI providers (OpenAI, Anthropic, Gemini, Ollama, OpenAI-Compatible)
 - **Batch Processing** — Translate single files or entire mod folders at once
 - **Smart Text Detection** — Automatically identifies translatable content while preserving game logic
+
+## Translation Providers
+
+| Provider | Flag | Cost | Requirements |
+|---|---|---|---|
+| Google Translate | `--provider google` | Free | `deep-translator` package |
+| OpenAI | `--provider openai` | Paid | `OPENAI_API_KEY` |
+| Anthropic Claude | `--provider anthropic` | Paid | `ANTHROPIC_API_KEY` |
+| Google Gemini | `--provider gemini` | Paid/Free tier | `GEMINI_API_KEY` |
+| Ollama (Local) | `--provider ollama` | Free | Ollama running locally |
+| OpenAI-Compatible | `--provider openaicompatible` | Varies | `OPENAICOMPATIBLE_API_KEY` + `OPENAICOMPATIBLE_BASE_URL` |
 
 ## Installation
 
@@ -52,6 +63,28 @@ scripts\start.bat
 ./scripts/start.sh
 ```
 
+## Configuration
+
+Copy `.env.example` to `.env` and configure your API keys:
+
+```bash
+cp .env.example .env
+```
+
+Supported environment variables:
+
+| Variable | Provider | Required | Default |
+|---|---|---|---|
+| `TRANSLATION_MODEL` | All AI | No | `gpt-4o-mini` |
+| `OPENAI_API_KEY` | openai | Yes | — |
+| `OPENAI_MODEL` | openai | No | `gpt-3.5-turbo` |
+| `ANTHROPIC_API_KEY` | anthropic | Yes | — |
+| `GEMINI_API_KEY` | gemini | Yes | — |
+| `OLLAMA_API_BASE` | ollama | No | `http://localhost:11434` |
+| `OPENAICOMPATIBLE_API_KEY` | openaicompatible | Yes | — |
+| `OPENAICOMPATIBLE_BASE_URL` | openaicompatible | Yes | — |
+| `OPENAICOMPATIBLE_MODEL` | openaicompatible | No | `gpt-4o-mini` |
+
 ## Usage
 
 ### Interactive Mode
@@ -64,40 +97,69 @@ mod-translator app
 
 ```bash
 # Basic usage with Google Translate (free)
-mod-translator --path path/to/mods --source en_US --target es_ES --output path/to/output
+mod-translator cli --path path/to/mods --source en_US --target es_ES --output path/to/output
 
 # AI-powered translation with OpenAI (requires API key)
-mod-translator --path path/to/mods --source en_US --target es_ES --output path/to/output --ai
+mod-translator cli --path path/to/mods --source en_US --target es_ES --output path/to/output --provider openai
+
+# Use Anthropic Claude
+mod-translator cli --path path/to/mods --source en_US --target es_ES --output path/to/output --provider anthropic
+
+# Use Google Gemini
+mod-translator cli --path path/to/mods --source en_US --target es_ES --output path/to/output --provider gemini
+
+# Use local Ollama
+mod-translator cli --path path/to/mods --source en_US --target es_ES --output path/to/output --provider ollama
+
+# Dry-run to preview changes
+mod-translator cli --path path/to/mods --source en_US --target es_ES --dry-run
 
 # Parameters:
 # --path (-p): Path to mod or mods folder (default: ./mods)
 # --source (-s): Source language code (e.g., en_US)
 # --target (-t): Target language code (e.g., es_ES)
 # --output (-o): Output folder path (if same as mods path, will replace original mods)
-# --ai: Use OpenAI translation instead of Google Translate (requires OPENAI_API_KEY)
+# --provider: Translation provider (google, openai, anthropic, gemini, ollama, openaicompatible)
+# --workers: Number of concurrent translation workers (default: 4)
+# --dry-run: Show what would be translated without making changes
+# --debug (-d): Enable debug logging
 ```
 
-## AI Translation Setup
+> The `--ai` flag is deprecated. Use `--provider openai` instead.
 
-To use OpenAI-powered translation:
+## Development
 
-1. Get an OpenAI API key from [OpenAI API](https://platform.openai.com/api-keys)
-2. Create a `.env` file in the project root:
+### Setup
 
-   ```
-   OPENAI_API_KEY=your_api_key_here
-   OPENAI_MODEL=gpt-3.5-turbo
-   ```
+```bash
+uv sync                # Install core dependencies
+uv sync --extra ai     # Install AI provider dependencies
+uv sync --group dev    # Install dev tools (pytest, ruff, mypy)
+```
 
-3. Install dependencies:
+### Commands
 
-    ```bash
-    uv sync --extra ai
-    ```
+```bash
+uv run pytest              # Run tests
+uv run pytest --cov        # Run tests with coverage
+uv run ruff check .        # Lint
+uv run ruff format .       # Format
+uv run mypy src/           # Type check
+```
 
-4. Use the `--ai` flag when running translations
+### Project Structure
 
-> OpenAI translation provides better context awareness and gaming-specific terminology but requires an API key with usage costs.
+```
+src/app/
+  core/            Settings, Translator, FileManager, provider checks
+  services/        Translation providers (Google, OpenAI, LiteLLM, etc.)
+  parsers/         File parsers (JSON, LANG, MCFUNCTION)
+  commands/        CLI entry points and TUI application
+  utils/           Retry logic, rate limiting, progress reporting
+tests/             Pytest test suite
+scripts/           Build and setup scripts
+docs/              Logo and screenshots
+```
 
 ## Screenshots
 
