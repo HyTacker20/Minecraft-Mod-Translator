@@ -29,6 +29,12 @@ class TestCommandLine:
         assert args.ai is True
         assert args.source == "en_US"
 
+    def test_parser_provider_flag(self):
+        parser = build_argument_parser()
+        args = parser.parse_args(["-s", "en_US", "--provider", "openai"])
+        assert args.provider == "openai"
+        assert args.source == "en_US"
+
 
 class TestProgressReporter:
     def test_report_title(self):

@@ -9,12 +9,10 @@ class TestMainEntry:
         if "app.__main__" in sys.modules:
             del sys.modules["app.__main__"]
         with patch("sys.argv", ["mod-translator", "cli", "-s", "en_US", "-t", "uk_UA"]):
+            from app.__main__ import _main
             with patch("app.commands.command_line.main") as mock_main:
                 mock_main.return_value = None
-                try:
-                    pass
-                except SystemExit:
-                    pass
+                _main()
 
     def test_main_importable(self):
         import app.__main__
@@ -24,6 +22,7 @@ class TestMainEntry:
         if "app.__main__" in sys.modules:
             del sys.modules["app.__main__"]
         with patch("sys.argv", ["mod-translator"]):
+            from app.__main__ import _main
             with patch("app.commands.command_line.main", side_effect=RuntimeError("test error")):
-                with pytest.raises(SystemExit):
-                    pass
+                with pytest.raises(RuntimeError):
+                    _main()

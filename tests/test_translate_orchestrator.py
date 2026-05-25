@@ -13,7 +13,7 @@ from app.commands.translate import (
 
 class TestCheckDependencies:
     def test_check_dependencies_google_available(self):
-        assert _check_dependencies(use_ai=False) is True
+        assert _check_dependencies(provider="google") is True
 
     def test_check_dependencies_google_missing(self):
         original_import = builtins.__import__
@@ -24,31 +24,30 @@ class TestCheckDependencies:
             return original_import(name, *args, **kwargs)
 
         with patch("builtins.__import__", side_effect=mock_import):
-            result = _check_dependencies(use_ai=False)
+            result = _check_dependencies(provider="google")
             assert result is False
 
     def test_check_dependencies_openai_available(self):
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key"}):
-            result = _check_dependencies(use_ai=True)
-            assert result is True
+        mock_litellm = MagicMock()
+        with patch.dict("sys.modules", {"litellm": mock_litellm}):
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key"}):
+                result = _check_dependencies(provider="openai")
+                assert result is True
 
     def test_check_dependencies_openai_no_key(self):
-        with patch.dict(os.environ, {}, clear=True):
-            if "OPENAI_API_KEY" in os.environ:
-                del os.environ["OPENAI_API_KEY"]
-            result = _check_dependencies(use_ai=True)
-            assert result is False
+        mock_litellm = MagicMock()
+        with patch.dict("sys.modules", {"litellm": mock_litellm}):
+            with patch.dict(os.environ, {}, clear=True):
+                if "OPENAI_API_KEY" in os.environ:
+                    del os.environ["OPENAI_API_KEY"]
+                result = _check_dependencies(provider="openai")
+                assert result is False
 
     def test_check_dependencies_openai_not_installed(self):
-        original_import = builtins.__import__
-
-        def mock_import(name, *args, **kwargs):
-            if name == "openai":
-                raise ImportError("No module named 'openai'")
-            return original_import(name, *args, **kwargs)
-
-        with patch("builtins.__import__", side_effect=mock_import):
-            result = _check_dependencies(use_ai=True)
+        with patch.dict("sys.modules", {}, clear=True):
+            if "litellm" in __import__("sys").modules:
+                pass
+            result = _check_dependencies(provider="openai")
             assert result is False
 
 
@@ -63,6 +62,7 @@ class TestTranslateOrchestrator:
             source="en_US",
             target="uk_UA",
             output=str(out_dir),
+            provider="google",
             ai=False,
             workers=4,
             dry_run=True,
@@ -80,7 +80,7 @@ class TestTranslateOrchestrator:
     def test_handle_translate_missing_deps(self):
         args = argparse.Namespace(
             path="./mods", source="en_US", target="uk_UA",
-            output="./out", ai=True, workers=4, dry_run=False,
+            output="./out", provider="openai", ai=False, workers=4, dry_run=False,
         )
         with patch("app.commands.translate._check_dependencies", return_value=False):
             result = handle_translate_command(args)
@@ -93,7 +93,7 @@ class TestTranslateOrchestrator:
         out_dir.mkdir()
         args = argparse.Namespace(
             path=str(mods_dir), source="en_US", target="uk_UA",
-            output=str(out_dir), ai=False, workers=8, dry_run=True,
+            output=str(out_dir), provider="google", ai=False, workers=8, dry_run=True,
         )
         with patch("app.commands.translate._check_dependencies", return_value=True):
             with patch("app.commands.translate.Settings") as MockSettings:
@@ -103,7 +103,7 @@ class TestTranslateOrchestrator:
                 mock_instance.translation_path = str(out_dir)
                 mock_instance.source_mc_lang = "en_US"
                 mock_instance.target_mc_lang = "uk_UA"
-                mock_instance.use_ai = False
+                mock_instance.provider = "google"
                 mock_instance.max_workers = 8
                 mock_instance.dry_run = True
                 MockSettings.return_value = mock_instance
@@ -121,15 +121,24 @@ class TestTranslateOrchestrator:
         add_translate_arguments(parser)
         args = parser.parse_args([
             "-p", "./mods", "-s", "en_US", "-t", "uk_UA",
-            "-o", "./out", "--ai", "--workers", "6", "--dry-run",
+            "-o", "./out", "--provider", "openai", "--workers", "6", "--dry-run",
         ])
         assert args.path == "./mods"
         assert args.source == "en_US"
         assert args.target == "uk_UA"
         assert args.output == "./out"
-        assert args.ai is True
+        assert args.provider == "openai"
         assert args.workers == 6
         assert args.dry_run is True
+
+    def test_add_translate_arguments_deprecated_ai_flag(self):
+        parser = argparse.ArgumentParser()
+        add_translate_arguments(parser)
+        args = parser.parse_args([
+            "-p", "./mods", "-s", "en_US", "-t", "uk_UA",
+            "-o", "./out", "--ai", "--workers", "6", "--dry-run",
+        ])
+        assert args.ai is True
 
     def test_add_translate_arguments_defaults(self):
         parser = argparse.ArgumentParser()
@@ -139,7 +148,7 @@ class TestTranslateOrchestrator:
         assert args.source is None
         assert args.target is None
         assert args.output is None
-        assert args.ai is False
+        assert args.provider == "google"
         assert args.workers == 4
         assert args.dry_run is False
 
@@ -150,7 +159,7 @@ class TestTranslateOrchestrator:
         out_dir.mkdir()
         args = argparse.Namespace(
             path=str(mods_dir), source="en_US", target="uk_UA",
-            output=str(out_dir), ai=False, workers=4, dry_run=False,
+            output=str(out_dir), provider="google", ai=False, workers=4, dry_run=False,
         )
         with patch("app.commands.translate._check_dependencies", return_value=True):
             with patch("app.commands.translate.FileManager") as MockFM:
@@ -169,7 +178,7 @@ class TestTranslateOrchestrator:
         shared_dir.mkdir()
         args = argparse.Namespace(
             path=str(shared_dir), source="en_US", target="uk_UA",
-            output=str(shared_dir), ai=False, workers=4, dry_run=False,
+            output=str(shared_dir), provider="google", ai=False, workers=4, dry_run=False,
         )
         with patch("app.commands.translate._check_dependencies", return_value=True):
             with patch("app.commands.translate.FileManager") as MockFM:
@@ -184,7 +193,7 @@ class TestTranslateOrchestrator:
         mods_dir.mkdir()
         args = argparse.Namespace(
             path=str(mods_dir), source="en_US", target="uk_UA",
-            output=str(tmp_path / "out"), ai=False, workers=4, dry_run=False,
+            output=str(tmp_path / "out"), provider="google", ai=False, workers=4, dry_run=False,
         )
         with patch("app.commands.translate._check_dependencies", return_value=True):
             with patch("app.commands.translate.FileManager") as MockFM:

@@ -3,6 +3,7 @@ Console application interface for Mod Translator.
 This module provides a user-friendly form-based terminal interface.
 """
 
+import argparse
 import logging
 import os
 import sys
@@ -22,6 +23,7 @@ from rich.theme import Theme
 from ..commands.translate import (
     handle_translate_command,
 )
+from ..core.provider_check import check_provider_available
 from ..logging_config import setup_logging
 from ..utils.progress import ProgressReporter
 
@@ -223,24 +225,26 @@ def get_user_input() -> dict[str, Any]:
         if target_lang is None:  # This occurs when user presses Ctrl+C
             sys.exit(0)
 
-        # Check if OpenAI is available for translation method selection
-        from ..core.openai_check import check_openai_available
-        openai_available, openai_status_message = check_openai_available()
-        openai_status_message = f"✅ {openai_status_message}" if openai_available else f"❌ {openai_status_message}"
-
-        # Get translation method
-        translation_choices = [
-            {"name": "🌐 Google Translate (Free) - Always available", "value": "google"},
+        # Check which providers are available
+        providers = [
+            ("google", "Google Translate (Free)", "Always available"),
+            ("openai", "OpenAI (GPT-4o-mini)", "OPENAI_API_KEY"),
+            ("anthropic", "Anthropic Claude", "ANTHROPIC_API_KEY"),
+            ("gemini", "Google Gemini", "GEMINI_API_KEY"),
+            ("ollama", "Ollama (Local)", "OLLAMA_API_BASE"),
         ]
 
-        if openai_available:
-            translation_choices.append(
-                {"name": f"🤖 OpenAI Translation (Premium) - {openai_status_message}", "value": "openai"}
-            )
-        else:
-            translation_choices.append(
-                {"name": f"🤖 OpenAI Translation (Premium) - {openai_status_message}", "value": "openai_unavailable"}
-            )
+        translation_choices = []
+        for provider_key, label, requirement in providers:
+            available, status_msg = check_provider_available(provider_key)
+            if available:
+                translation_choices.append(
+                    {"name": f"{label} ✅ ({status_msg})", "value": provider_key}
+                )
+            else:
+                translation_choices.append(
+                    {"name": f"{label} ❌ ({status_msg})", "value": f"{provider_key}_unavailable"}
+                )
 
         translation_method = questionary.select(
             "Choose translation method:",
@@ -251,20 +255,18 @@ def get_user_input() -> dict[str, Any]:
             use_jk_keys=False
         ).ask()
 
-        if translation_method is None:  # This occurs when user presses Ctrl+C
+        if translation_method is None:
             sys.exit(0)
 
-        # Handle OpenAI unavailable selection
-        if translation_method == "openai_unavailable":
-            console.print("\n[bold yellow]OpenAI Translation Setup Required[/bold yellow]")
-            console.print("To use OpenAI translation, you need to:")
-            console.print("1. Install dependencies: [cyan]pip install openai python-dotenv[/cyan]")
-            console.print("2. Get an API key from: [cyan]https://platform.openai.com/api-keys[/cyan]")
-            console.print("3. Create a [cyan].env[/cyan] file with: [cyan]OPENAI_API_KEY=your_key_here[/cyan]")
+        if translation_method.endswith("_unavailable"):
+            provider_name = translation_method.replace("_unavailable", "")
+            _, status = check_provider_available(provider_name)
+            console.print(f"\n[bold yellow]{provider_name.capitalize()} Setup Required[/bold yellow]")
+            console.print(f"Status: {status}")
+            console.print("Install dependencies: [cyan]pip install litellm python-dotenv[/cyan]")
+            console.print("Set your API key in a .env file or environment variable.")
             console.print("\nFalling back to Google Translate...\n")
             translation_method = "google"
-
-        use_ai = translation_method == "openai"
 
         # Get output path
         output_choice = questionary.select(
@@ -311,7 +313,7 @@ def get_user_input() -> dict[str, Any]:
         confirmation_table.add_row("Mods path", mods_path)
         confirmation_table.add_row("Source language", language_names.get(source_lang, source_lang))
         confirmation_table.add_row("Target language", language_names.get(target_lang, target_lang))
-        confirmation_table.add_row("Translation method", "🤖 OpenAI (Premium)" if use_ai else "🌐 Google Translate (Free)")
+        confirmation_table.add_row("Translation method", translation_method.capitalize())
         confirmation_table.add_row("Output path", output_path)
 
         console.print(confirmation_table)
@@ -334,7 +336,7 @@ def get_user_input() -> dict[str, Any]:
             "source": source_lang,
             "target": target_lang,
             "output": output_path,
-            "ai": use_ai
+            "provider": translation_method,
         }
     except KeyboardInterrupt:
         # Silently exit on Ctrl+C without showing any error message
@@ -342,10 +344,10 @@ def get_user_input() -> dict[str, Any]:
 
 def run_translation(params: dict[str, Any]) -> None:
     try:
-        logger = setup_logging(console_level=logging.INFO)
+        setup_logging(console_level=logging.INFO)
 
-        class Args:
-            def __init__(self, **kwargs):
+        class Args(argparse.Namespace):
+            def __init__(self, **kwargs: Any):
                 for key, value in kwargs.items():
                     setattr(self, key, value)
 
@@ -419,13 +421,13 @@ def main() -> None:
 
         params = get_user_input()
 
-        # Additional check for OpenAI if AI translation was selected
-        if params.get("ai", False):
-            available, status = check_openai_available()
+        if params.get("provider") != "google":
+            from ..core.provider_check import check_provider_available
+            available, status = check_provider_available(params["provider"])
             if not available:
                 console.print(Panel(
-                    f"[bold]OpenAI not available: {status}[/bold]",
-                    title="OpenAI Setup Required",
+                    f"[bold]{params['provider'].capitalize()} not available: {status}[/bold]",
+                    title="Provider Setup Required",
                     border_style="red",
                     title_align="center",
                     box=box.DOUBLE

@@ -20,45 +20,83 @@ def add_translate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-s", "--source", help="Source language code (e.g., en_US)")
     parser.add_argument("-t", "--target", help="Target language code (e.g., es_ES)")
     parser.add_argument("-o", "--output", help="Output folder path")
-    parser.add_argument("--ai", action="store_true", help="Use OpenAI translation instead of Google Translate")
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default="google",
+        choices=["google", "openai", "anthropic", "gemini", "ollama", "litellm"],
+        help="Translation provider (default: google)",
+    )
+    parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="[DEPRECATED] Use --provider openai instead",
+    )
     parser.add_argument("--workers", type=int, default=4, help="Number of concurrent translation workers (default: 4)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated without making changes")
 
 
-def _check_dependencies(use_ai: bool) -> bool:
-    if use_ai:
+def _check_dependencies(provider: str) -> bool:
+    if provider == "google":
         try:
-            import openai
-            try:
-                from dotenv import load_dotenv
-                load_dotenv()
-                logger.info("Loaded .env file")
-            except ImportError:
-                logger.info("python-dotenv not found, using system environment variables")
-
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                logger.error("OPENAI_API_KEY environment variable not set.")
-                return False
-            else:
-                logger.info("OpenAI API key configured")
-        except ImportError:
-            logger.error("OpenAI package not found. Install with: pip install openai python-dotenv")
-            return False
-    else:
-        try:
-            from deep_translator import GoogleTranslator
+            from deep_translator import GoogleTranslator  # noqa: F401
         except ImportError:
             logger.error("deep_translator package is required. Install with: pip install deep-translator")
             return False
+        return True
+
+    try:
+        import litellm  # noqa: F401
+    except ImportError:
+        logger.error("LiteLLM package is required for AI providers. Install with: pip install litellm")
+        return False
+
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        logger.info("Loaded .env file")
+    except ImportError:
+        logger.info("python-dotenv not found, using system environment variables")
+
+    if provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAI_API_KEY environment variable not set.")
+            return False
+        logger.info("OpenAI API key configured")
+        return True
+
+    if provider == "anthropic":
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.error("ANTHROPIC_API_KEY environment variable not set.")
+            return False
+        logger.info("Anthropic API key configured")
+        return True
+
+    if provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.error("GEMINI_API_KEY environment variable not set.")
+            return False
+        logger.info("Gemini API key configured")
+        return True
+
+    logger.info("LiteLLM configured for provider: %s", provider)
     return True
 
 
 def handle_translate_command(args: argparse.Namespace) -> None:
     try:
-        if not _check_dependencies(getattr(args, "ai", False)):
+        provider = getattr(args, "provider", "google")
+        if getattr(args, "ai", False):
+            logger.warning("--ai flag is deprecated, use --provider openai instead")
+            provider = "openai"
+
+        if not _check_dependencies(provider):
             return
 
+        args.provider = provider
         settings = Settings(cli_args=args)
         file_manager = FileManager(settings)
 
@@ -69,7 +107,7 @@ def handle_translate_command(args: argparse.Namespace) -> None:
             logger.info("Mods path: %s", settings.mods_path)
             logger.info("Source language: %s", settings.source_mc_lang)
             logger.info("Target language: %s", settings.target_mc_lang)
-            logger.info("Translation method: %s", "OpenAI" if settings.use_ai else "Google Translate")
+            logger.info("Translation provider: %s", settings.provider)
             logger.info("Output path: %s", settings.translation_path)
             logger.info("Workers: %d", settings.max_workers)
 
