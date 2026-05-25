@@ -123,3 +123,39 @@ class TestTranslationRateLimiter:
     def test_create_decorator_openai(self):
         decorator = create_retry_decorator("openai")
         assert callable(decorator)
+
+    def test_get_tracker_unknown_service(self):
+        limiter = TranslationRateLimiter()
+        tracker = limiter.get_tracker("unknown")
+        assert isinstance(tracker, RateLimitTracker)
+
+    def test_apply_service_delay_no_need(self):
+        limiter = TranslationRateLimiter()
+        limiter.google_tracker.consecutive_rate_limits = 0
+        limiter.apply_service_delay("google")
+
+    def test_apply_service_delay_with_preventive(self):
+        limiter = TranslationRateLimiter()
+        limiter.google_tracker.consecutive_rate_limits = 1
+        limiter.google_tracker.last_rate_limit_time = time.time()
+        limiter.apply_service_delay("google")
+
+    def test_preventive_delay_after_rate_limit(self):
+        tracker = RateLimitTracker()
+        tracker.consecutive_rate_limits = 1
+        tracker.last_rate_limit_time = time.time()
+        assert tracker.should_apply_preventive_delay() is True
+        delay = tracker.get_preventive_delay()
+        assert delay > 0
+        assert delay <= 10.0
+
+    def test_no_preventive_delay_without_history(self):
+        tracker = RateLimitTracker()
+        assert tracker.should_apply_preventive_delay() is False
+        assert tracker.get_preventive_delay() == 0
+
+    def test_preventive_delay_expired(self):
+        tracker = RateLimitTracker()
+        tracker.consecutive_rate_limits = 1
+        tracker.last_rate_limit_time = time.time() - 400
+        assert tracker.should_apply_preventive_delay() is False
