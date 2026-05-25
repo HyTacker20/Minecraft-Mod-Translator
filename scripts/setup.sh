@@ -5,53 +5,25 @@ echo "  Minecraft Mod Translator Setup"
 echo "===================================="
 echo
 
-# Change to project root directory
 cd "$(dirname "$0")/.."
 
-# Create virtual environment
-echo "Creating virtual environment..."
-python3 -m venv .venv
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to create virtual environment!"
-    exit 1
+if ! command -v uv &> /dev/null; then
+    echo "uv not found. Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install uv"
+        exit 1
+    fi
+    echo "uv installed. Please restart your shell or run setup again."
+    exit 0
 fi
-echo "Virtual environment created successfully."
 
-# Activate virtual environment
-echo "Activating virtual environment..."
-source .venv/bin/activate
+echo "Syncing dependencies..."
+uv sync
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to activate virtual environment!"
+    echo "Error: Failed to sync dependencies"
     exit 1
 fi
-echo "Virtual environment activated successfully."
-
-# Upgrade pip within the virtual environment
-echo "Upgrading pip to latest version within virtual environment..."
-pip install --upgrade pip
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to upgrade pip!"
-    exit 1
-fi
-echo "Pip upgraded successfully."
-
-# Install requirements
-echo "Installing dependencies..."
-pip install -r requirements.txt
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to install dependencies!"
-    exit 1
-fi
-echo "Dependencies installed successfully."
-
-# Install package in development mode
-echo "Installing package in development mode..."
-pip install -e .
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to install package in development mode!"
-    exit 1
-fi
-echo "Package installed successfully."
 
 echo
 echo "===================================="
@@ -59,8 +31,4 @@ echo "      Setup Complete!"
 echo "===================================="
 echo
 
-# Show help for the CLI tool
-echo "Displaying help for mod-translator..."
-mod-translator --help
-
-read -p "Press Enter to continue..."
+uv run mod-translator --help

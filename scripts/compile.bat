@@ -7,94 +7,44 @@ echo  Minecraft Mod Translator Compiler
 echo ====================================
 echo.
 
-:: Change to project root directory
 cd /d "%~dp0\.."
 
-:: Check if virtual environment exists
-if not exist "venv" (
-    echo Creating virtual environment...
-    python -m venv venv
-    if errorlevel 1 (
-        echo Error: Failed to create virtual environment
-        pause
-        exit /b 1
-    )
-    echo Virtual environment created successfully.
-)
-
-:: Activate virtual environment
-echo Activating virtual environment...
-call venv\Scripts\activate.bat
+where uv >nul 2>&1
 if errorlevel 1 (
-    echo Error: Failed to activate virtual environment
+    echo Error: uv not found. Please run setup.bat first.
     pause
     exit /b 1
 )
-echo Virtual environment activated successfully.
 
-:: Install dependencies
-echo Installing dependencies...
-pip install -r requirements.txt
-if errorlevel 1 (
-    echo Error: Failed to install dependencies
+if not exist ".venv\Scripts\python.exe" (
+    echo Error: Virtual environment not found. Please run setup.bat first.
     pause
     exit /b 1
 )
-echo Dependencies installed successfully.
 
-:: Check if PyInstaller is installed
-echo Checking PyInstaller...
-pip show pyinstaller >nul 2>&1
+echo Syncing dependencies with build group...
+uv sync --group build
 if errorlevel 1 (
-    echo Installing PyInstaller...
-    pip install pyinstaller
-    if errorlevel 1 (
-        echo Error: Failed to install PyInstaller
-        pause
-        exit /b 1
-    )
-    echo PyInstaller installed successfully.
-) else (
-    echo PyInstaller is already installed.
+    echo Error: Failed to sync dependencies
+    pause
+    exit /b 1
 )
 
-:: Clean previous builds
-if exist "build" (
-    echo Cleaning previous build directory...
-    rmdir /s /q build
-)
-
-if exist "dist" (
-    echo Cleaning previous dist directory...
-    rmdir /s /q dist
-)
-
-:: Create dist directory
+if exist "build" rmdir /s /q build
+if exist "dist" rmdir /s /q dist
 mkdir dist 2>nul
 
-:: Create wrapper script for app version
-echo Creating wrapper script for app version...
-echo import sys > temp_app_wrapper.py
-echo import os >> temp_app_wrapper.py
-echo sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src')) >> temp_app_wrapper.py
-echo sys.argv.append('app') >> temp_app_wrapper.py
-echo from app.commands.app import main >> temp_app_wrapper.py
-echo if __name__ == '__main__': >> temp_app_wrapper.py
-echo     main() >> temp_app_wrapper.py
-
-:: Get pyfiglet fonts location
 echo Finding pyfiglet fonts location...
-for /f "delims=" %%i in ('python -c "import pyfiglet; import os; print(os.path.dirname(pyfiglet.__file__))"') do set PYFIGLET_PATH=%%i
+for /f "delims=" %%i in ('uv run python -c "import pyfiglet; import os; print(os.path.dirname(pyfiglet.__file__))"') do set PYFIGLET_PATH=%%i
 echo Pyfiglet path: %PYFIGLET_PATH%
 
-:: Compile the CLI application
 echo.
 echo ====================================
 echo    Compiling CLI Application...
 echo ====================================
 echo.
 
-pyinstaller --onefile ^
+uv run pyinstaller --onefile ^
     --name "mod-translator" ^
     --icon docs\logo\logo.ico ^
     --distpath dist ^
@@ -144,14 +94,22 @@ if errorlevel 1 (
 
 echo CLI application compiled successfully.
 
-:: Compile the APP application
+echo Creating wrapper script for app version...
+echo import sys > temp_app_wrapper.py
+echo import os >> temp_app_wrapper.py
+echo sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src')) >> temp_app_wrapper.py
+echo sys.argv.append('app') >> temp_app_wrapper.py
+echo from app.commands.app import main >> temp_app_wrapper.py
+echo if __name__ == '__main__': >> temp_app_wrapper.py
+echo     main() >> temp_app_wrapper.py
+
 echo.
 echo ====================================
 echo  Compiling Interactive Application...
 echo ====================================
 echo.
 
-pyinstaller --onefile ^
+uv run pyinstaller --onefile ^
     --name "Minecraft Mod Translator" ^
     --icon docs\logo\logo.ico ^
     --distpath dist ^
@@ -200,22 +158,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Interactive application compiled successfully.
-
-:: Clean up wrapper script
 del temp_app_wrapper.py 2>nul
 
-:: Check if executables were created
+echo Interactive application compiled successfully.
+
 set CLI_EXISTS=0
 set APP_EXISTS=0
 
-if exist "dist\mod-translator.exe" (
-    set CLI_EXISTS=1
-)
-
-if exist "dist\Minecraft Mod Translator.exe" (
-    set APP_EXISTS=1
-)
+if exist "dist\mod-translator.exe" set CLI_EXISTS=1
+if exist "dist\Minecraft Mod Translator.exe" set APP_EXISTS=1
 
 if %CLI_EXISTS%==1 if %APP_EXISTS%==1 (
     echo.
@@ -244,7 +195,6 @@ if %CLI_EXISTS%==1 if %APP_EXISTS%==1 (
     exit /b 1
 )
 
-:: Clean up build artifacts
 echo Cleaning build artifacts...
 if exist "build" rmdir /s /q build
 if exist "mod-translator.spec" del "mod-translator.spec"

@@ -7,58 +7,29 @@ echo  Minecraft Mod Translator Setup
 echo ====================================
 echo.
 
-:: Change to project root directory
 cd /d "%~dp0\.."
 
-:: Upgrade pip to latest version
-echo Upgrading pip to latest version...
-python -m pip install --upgrade pip
+where uv >nul 2>&1
 if errorlevel 1 (
-    echo Error: Failed to upgrade pip!
+    echo uv not found. Installing uv...
+    powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+    if errorlevel 1 (
+        echo Error: Failed to install uv
+        pause
+        exit /b 1
+    )
+    echo uv installed successfully. Please restart your terminal or run setup again.
     pause
-    exit /b 1
+    exit /b 0
 )
-echo Pip upgraded successfully.
 
-:: Create virtual environment
-echo Creating virtual environment...
-python -m venv .venv
+echo Syncing dependencies...
+uv sync
 if errorlevel 1 (
-    echo Error: Failed to create virtual environment!
+    echo Error: Failed to sync dependencies
     pause
     exit /b 1
 )
-echo Virtual environment created successfully.
-
-:: Activate virtual environment
-echo Activating virtual environment...
-call .venv\Scripts\activate
-if errorlevel 1 (
-    echo Error: Failed to activate virtual environment!
-    pause
-    exit /b 1
-)
-echo Virtual environment activated successfully.
-
-:: Install requirements
-echo Installing dependencies...
-pip install -r requirements.txt
-if errorlevel 1 (
-    echo Error: Failed to install dependencies!
-    pause
-    exit /b 1
-)
-echo Dependencies installed successfully.
-
-:: Install package in development mode
-echo Installing package in development mode...
-pip install -e .
-if errorlevel 1 (
-    echo Error: Failed to install package in development mode!
-    pause
-    exit /b 1
-)
-echo Package installed successfully.
 
 echo.
 echo ====================================
@@ -66,8 +37,6 @@ echo      Setup Complete!
 echo ====================================
 echo.
 
-:: Show help for the CLI tool
-echo Displaying help for mod-translator...
-mod-translator --help
+uv run mod-translator --help
 
 pause

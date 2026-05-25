@@ -34,23 +34,22 @@ No Python installation required.
 ### From Source
 
 ```bash
+# Install uv first (https://docs.astral.sh/uv/getting-started/installation/)
 git clone https://github.com/zvictorium/minecraft-mod-translator.git
 cd minecraft-mod-translator
 
 # Setup the environment (Windows)
-setup.bat
+scripts\setup.bat
 # Or for Linux/Mac
-./setup.sh
+./scripts/setup.sh
 
-# For AI translation support, install additional dependencies:
-pip install openai python-dotenv
-# Or install everything with:
-pip install -e .[ai]
+# For AI translation support, sync with ai extras:
+uv sync --extra ai
 
 # Run the application (Windows)
-start.bat
+scripts\start.bat
 # Or for Linux/Mac
-./start.sh
+./scripts/start.sh
 ```
 
 ## Usage
@@ -92,9 +91,9 @@ To use OpenAI-powered translation:
 
 3. Install dependencies:
 
-   ```bash
-   pip install openai python-dotenv
-   ```
+    ```bash
+    uv sync --extra ai
+    ```
 
 4. Use the `--ai` flag when running translations
 

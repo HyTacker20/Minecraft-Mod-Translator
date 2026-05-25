@@ -5,92 +5,40 @@ echo "  Minecraft Mod Translator Compiler"
 echo "===================================="
 echo
 
-# Change to project root directory
 cd "$(dirname "$0")/.."
 
-# Check if virtual environment exists
-if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv venv
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to create virtual environment"
-        exit 1
-    fi
-    echo "Virtual environment created successfully."
-fi
-
-# Activate virtual environment
-echo "Activating virtual environment..."
-source venv/bin/activate
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to activate virtual environment"
+if ! command -v uv &> /dev/null; then
+    echo "Error: uv not found. Please run setup.sh first."
     exit 1
 fi
-echo "Virtual environment activated successfully."
 
-# Install dependencies
-echo "Installing dependencies..."
-pip install -r requirements.txt
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to install dependencies"
+if [ ! -f ".venv/bin/python" ]; then
+    echo "Error: Virtual environment not found. Please run setup.sh first."
     exit 1
 fi
-echo "Dependencies installed successfully."
 
-# Check if PyInstaller is installed
-echo "Checking PyInstaller..."
-pip show pyinstaller > /dev/null 2>&1
+echo "Syncing dependencies with build group..."
+uv sync --group build
 if [ $? -ne 0 ]; then
-    echo "Installing PyInstaller..."
-    pip install pyinstaller
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to install PyInstaller"
-        exit 1
-    fi
-    echo "PyInstaller installed successfully."
-else
-    echo "PyInstaller is already installed."
+    echo "Error: Failed to sync dependencies"
+    exit 1
 fi
 
-# Clean previous builds
-if [ -d "build" ]; then
-    echo "Cleaning previous build directory..."
-    rm -rf build
-fi
-
-if [ -d "dist" ]; then
-    echo "Cleaning previous dist directory..."
-    rm -rf dist
-fi
-
-# Create dist directory
+if [ -d "build" ]; then rm -rf build; fi
+if [ -d "dist" ]; then rm -rf dist; fi
 mkdir -p dist
 
-# Create wrapper script for app version
-echo "Creating wrapper script for app version..."
-cat > temp_app_wrapper.py << 'EOF'
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-sys.argv.append('app')
-from app.commands.app import main
-if __name__ == '__main__':
-    main()
-EOF
-
-# Get pyfiglet fonts location
 echo "Finding pyfiglet fonts location..."
-PYFIGLET_PATH=$(python3 -c "import pyfiglet; import os; print(os.path.dirname(pyfiglet.__file__))")
+PYFIGLET_PATH=$(uv run python -c "import pyfiglet; import os; print(os.path.dirname(pyfiglet.__file__))")
 echo "Pyfiglet path: $PYFIGLET_PATH"
 
-# Compile the CLI application
 echo
 echo "===================================="
 echo "    Compiling CLI Application..."
 echo "===================================="
 echo
 
-pyinstaller --onefile \
+uv run pyinstaller --onefile \
     --name "mod-translator" \
     --icon docs/logo/logo.ico \
     --distpath dist \
@@ -106,6 +54,18 @@ pyinstaller --onefile \
     --hidden-import "app.commands.command_line" \
     --hidden-import "app.commands.app" \
     --hidden-import "app.commands.translate" \
+    --hidden-import "app.core" \
+    --hidden-import "app.core.settings" \
+    --hidden-import "app.core.translator" \
+    --hidden-import "app.core.file_manager" \
+    --hidden-import "app.parsers" \
+    --hidden-import "app.parsers.json_parser" \
+    --hidden-import "app.parsers.lang_parser" \
+    --hidden-import "app.parsers.mcfunction_parser" \
+    --hidden-import "app.services" \
+    --hidden-import "app.services.google_translate" \
+    --hidden-import "app.services.openai_translate" \
+    --hidden-import "app.data" \
     --hidden-import "deep_translator" \
     --hidden-import "rich" \
     --hidden-import "questionary" \
@@ -127,14 +87,24 @@ fi
 
 echo "CLI application compiled successfully."
 
-# Compile the APP application
+echo "Creating wrapper script for app version..."
+cat > temp_app_wrapper.py << 'EOF'
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.argv.append('app')
+from app.commands.app import main
+if __name__ == '__main__':
+    main()
+EOF
+
 echo
 echo "===================================="
 echo "  Compiling Interactive Application..."
 echo "===================================="
 echo
 
-pyinstaller --onefile \
+uv run pyinstaller --onefile \
     --name "Minecraft Mod Translator" \
     --icon docs/logo/logo.ico \
     --distpath dist \
@@ -150,6 +120,18 @@ pyinstaller --onefile \
     --hidden-import "app.commands.command_line" \
     --hidden-import "app.commands.app" \
     --hidden-import "app.commands.translate" \
+    --hidden-import "app.core" \
+    --hidden-import "app.core.settings" \
+    --hidden-import "app.core.translator" \
+    --hidden-import "app.core.file_manager" \
+    --hidden-import "app.parsers" \
+    --hidden-import "app.parsers.json_parser" \
+    --hidden-import "app.parsers.lang_parser" \
+    --hidden-import "app.parsers.mcfunction_parser" \
+    --hidden-import "app.services" \
+    --hidden-import "app.services.google_translate" \
+    --hidden-import "app.services.openai_translate" \
+    --hidden-import "app.data" \
     --hidden-import "deep_translator" \
     --hidden-import "rich" \
     --hidden-import "questionary" \
@@ -170,22 +152,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Interactive application compiled successfully."
-
-# Clean up wrapper script
 rm -f temp_app_wrapper.py
 
-# Check if executables were created
+echo "Interactive application compiled successfully."
+
 CLI_EXISTS=0
 APP_EXISTS=0
 
-if [ -f "dist/mod-translator" ]; then
-    CLI_EXISTS=1
-fi
-
-if [ -f "dist/Minecraft Mod Translator" ]; then
-    APP_EXISTS=1
-fi
+if [ -f "dist/mod-translator" ]; then CLI_EXISTS=1; fi
+if [ -f "dist/Minecraft Mod Translator" ]; then APP_EXISTS=1; fi
 
 if [ $CLI_EXISTS -eq 1 ] && [ $APP_EXISTS -eq 1 ]; then
     echo
@@ -208,20 +183,14 @@ else
     echo "===================================="
     echo "     Compilation FAILED!"
     echo "===================================="
-    if [ $CLI_EXISTS -eq 0 ]; then
-        echo "Error: CLI executable not found in dist directory"
-    fi
-    if [ $APP_EXISTS -eq 0 ]; then
-        echo "Error: APP executable not found in dist directory"
-    fi
+    if [ $CLI_EXISTS -eq 0 ]; then echo "Error: CLI executable not found in dist directory"; fi
+    if [ $APP_EXISTS -eq 0 ]; then echo "Error: APP executable not found in dist directory"; fi
     exit 1
 fi
 
-# Clean up build artifacts
 echo "Cleaning build artifacts..."
 rm -rf build
-rm -f "mod-translator.spec"
-rm -f "Minecraft Mod Translator.spec"
+rm -f "mod-translator.spec" "Minecraft Mod Translator.spec"
 
 echo
 echo "===================================="
