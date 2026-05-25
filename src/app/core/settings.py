@@ -18,6 +18,9 @@ class Settings:
         self.provider = "google"
         self.max_workers = 4
         self.dry_run = False
+        self.include_mods: list[str] | None = None
+        self.exclude_mods: list[str] | None = None
+        self.selected_mods: list[str] | None = None
 
         if config_data:
             self._apply_config_data(config_data)
@@ -39,6 +42,12 @@ class Settings:
             self.max_workers = int(config_data["workers"])
         if "output" in config_data and config_data["output"]:
             self.translation_path = config_data["output"]
+        mods_config = config_data.get("mods", {})
+        if isinstance(mods_config, dict):
+            if "include" in mods_config:
+                self.include_mods = mods_config["include"]
+            if "exclude" in mods_config:
+                self.exclude_mods = mods_config["exclude"]
 
     def _apply_cli_args(self, cli_args: argparse.Namespace) -> None:
         if hasattr(cli_args, "source") and cli_args.source:
@@ -64,6 +73,20 @@ class Settings:
 
         if hasattr(cli_args, "dry_run"):
             self.dry_run = cli_args.dry_run
+
+        if hasattr(cli_args, "include_mods") and cli_args.include_mods:
+            self.include_mods = cli_args.include_mods.split(",")
+        if hasattr(cli_args, "exclude_mods") and cli_args.exclude_mods:
+            self.exclude_mods = cli_args.exclude_mods.split(",")
+        if hasattr(cli_args, "selected_mods") and cli_args.selected_mods:
+            self.selected_mods = cli_args.selected_mods
+
+        if hasattr(cli_args, "mods_list") and cli_args.mods_list:
+            try:
+                with open(cli_args.mods_list, encoding="utf-8") as f:
+                    self.selected_mods = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+            except OSError:
+                pass
 
     def _get_google_lang(self, mc_lang: str) -> str:
         google_lang = mc_lang.split("_")[0]

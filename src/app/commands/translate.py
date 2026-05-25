@@ -3,14 +3,18 @@ Minecraft mod translation orchestration.
 """
 
 import argparse
+import json
 import logging
 import os
 import zipfile
 
 from ..core.config_loader import find_config_file, load_config
 from ..core.file_manager import FileManager
+from ..core.mod_scanner import ModScanner
 from ..core.settings import Settings
 from ..logging_config import setup_logging
+from ..utils.progress import ProgressReporter
+from ..utils.stats import OverallStats
 
 logger = logging.getLogger("mod_translator")
 
@@ -37,6 +41,30 @@ def add_translate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--workers", type=int, default=4, help="Number of concurrent translation workers (default: 4)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated without making changes")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging to console")
+    parser.add_argument(
+        "--include-mods",
+        type=str,
+        default=None,
+        help="Comma-separated glob patterns for mods to include (e.g. '*Iron*,*JEI*')",
+    )
+    parser.add_argument(
+        "--exclude-mods",
+        type=str,
+        default=None,
+        help="Comma-separated glob patterns for mods to exclude (e.g. 'test_*,debug_*')",
+    )
+    parser.add_argument(
+        "--mods-list",
+        type=str,
+        default=None,
+        help="Path to a text file listing mod names to translate (one per line)",
+    )
+    parser.add_argument(
+        "--export-stats",
+        type=str,
+        default=None,
+        help="Export translation statistics as JSON to the given path",
+    )
     parser.add_argument(
         "-c", "--config",
         type=str,
@@ -126,6 +154,30 @@ def _check_dependencies(provider: str) -> bool:
     return True
 
 
+def _print_cli_summary(stats: OverallStats) -> None:
+    log = logging.getLogger("mod_translator")
+    log.info("=" * 50)
+    log.info("  Translation Complete — %d mods processed", stats.total_mods)
+    log.info("")
+    log.info("  %-30s %8s %7s %8s", "Mod", "Entries", "Files", "Time")
+    log.info("  " + "-" * 55)
+    for m in stats.mods:
+        status = " SKIPPED" if m.skipped else ""
+        time_s = f"{m.duration_ms / 1000:.1f}s"
+        log.info("  %-30s %8d %7d %8s%s", m.name[:30], m.total_entries, len(m.files), time_s, status)
+    log.info("  " + "-" * 55)
+    total_time = f"{stats.total_duration_ms / 1000:.1f}s"
+    log.info("  %-30s %8d %7d %8s", "TOTAL", stats.total_entries, sum(len(m.files) for m in stats.mods), total_time)
+    log.info("")
+    log.info("  Provider: %s", stats.provider)
+    log.info("  Source → Target: %s → %s", stats.source_lang, stats.target_lang)
+    if stats.failed_entries > 0:
+        log.warning("  Failed: %d entries", stats.failed_entries)
+    else:
+        log.info("  Failed: 0 entries")
+    log.info("=" * 50)
+
+
 def handle_translate_command(args: argparse.Namespace) -> None:
     try:
         provider = getattr(args, "provider", "google")
@@ -139,15 +191,26 @@ def handle_translate_command(args: argparse.Namespace) -> None:
         debug = getattr(args, "debug", False)
         setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
 
+        reporter = ProgressReporter()
+
         args.provider = provider
         config_data = None
         config_path = find_config_file(getattr(args, "path", "./"), getattr(args, "config", None))
         if config_path:
             config_data = load_config(config_path)
         settings = Settings(cli_args=args, config_data=config_data)
-        file_manager = FileManager(settings)
 
-        file_manager.create_needed_folders()
+        scanner = ModScanner(settings.mods_path, reporter=reporter)
+        mods = scanner.discover_mods(include=settings.include_mods, exclude=settings.exclude_mods)
+
+        if settings.selected_mods:
+            selected_set = set(settings.selected_mods)
+            for mod in mods:
+                if mod.name not in selected_set:
+                    mod.selected = False
+
+        selected_count = sum(1 for m in mods if m.selected)
+        has_explicit_filter = bool(settings.selected_mods or settings.include_mods or settings.exclude_mods)
 
         if getattr(args, "dry_run", False):
             logger.info("--- DRY RUN ---")
@@ -157,18 +220,37 @@ def handle_translate_command(args: argparse.Namespace) -> None:
             logger.info("Translation provider: %s", settings.provider)
             logger.info("Output path: %s", settings.translation_path)
             logger.info("Workers: %d", settings.max_workers)
+            logger.info("Found %d JAR(s): %d selected", len(mods), selected_count)
 
-            file_manager.unpack_mods()
-            lang_folders = file_manager.get_lang_folders()
-            logger.info("Would translate files in %d folder(s):", len(lang_folders))
-            for folder in lang_folders:
-                logger.info("  - %s", folder)
+            if selected_count == 0:
+                logger.info("No mods to translate in dry run.")
+                logger.info("--- DRY RUN COMPLETE (no files modified) ---")
+                return
+
+            logger.info("Would translate the following %d mod(s):", selected_count)
+            for mod in mods:
+                if mod.selected:
+                    for f in mod.source_files:
+                        logger.info("  - %s → %s", mod.name, f)
             logger.info("--- DRY RUN COMPLETE (no files modified) ---")
-            file_manager.remove_folder(settings.temp_path)
             return
 
+        if selected_count == 0 and has_explicit_filter:
+            logger.warning("No mods matched the selection criteria. Exiting.")
+            return
+
+        total_estimated_entries = sum(m.estimated_entries for m in mods if m.selected)
+        logger.info(
+            "Selected %d / %d mods (~%d estimated entries)",
+            selected_count, len(mods), total_estimated_entries,
+        )
+
+        file_manager = FileManager(settings, reporter=reporter)
+        file_manager.create_needed_folders()
+
         logger.info("Unpacking mod files...")
-        file_manager.unpack_mods()
+        selected_names = [m.name for m in mods if m.selected]
+        file_manager.unpack_mods(selected_mods=selected_names)
         lang_folders = file_manager.get_lang_folders()
         logger.info("Translating mods...")
         file_manager.edit_lang_files(lang_folders)
@@ -192,12 +274,26 @@ def handle_translate_command(args: argparse.Namespace) -> None:
             logger.info("Translation completed to output directory...")
 
         file_manager.remove_folder(settings.temp_path)
-        logger.info("All mods have been translated!")
+
+        export_path = getattr(args, "export_stats", None)
+        if export_path and file_manager.overall_stats:
+            file_manager.overall_stats.provider = settings.provider
+            file_manager.overall_stats.source_lang = settings.source_mc_lang
+            file_manager.overall_stats.target_lang = settings.target_mc_lang
+            file_manager.overall_stats.finish()
+            with open(export_path, "w", encoding="utf-8") as fh:
+                json.dump(file_manager.overall_stats.to_dict(), fh, indent=2, ensure_ascii=False)
+            logger.info("Stats exported to %s", export_path)
+
+        if file_manager.overall_stats:
+            _print_cli_summary(file_manager.overall_stats)
+        else:
+            logger.info("All mods have been translated!")
     except KeyboardInterrupt:
         logger.info("Translation interrupted by user. Cleaning up...")
         try:
             if "settings" in locals() and os.path.exists(settings.temp_path):
-                file_manager.remove_folder(settings.temp_path)
+                FileManager(settings).remove_folder(settings.temp_path)
         except Exception:
             pass
     except Exception as e:

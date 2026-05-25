@@ -16,6 +16,7 @@ CONFIG_FILE_NAME = "translator.toml"
 HIDDEN_CONFIG_FILE_NAME = ".translator.toml"
 
 VALID_CONFIG_KEYS = frozenset({"source", "target", "provider", "workers", "output"})
+VALID_MOD_KEYS = frozenset({"include", "exclude"})
 
 CONFIG_TEMPLATE = """# Minecraft Mod Translator configuration
 # This file is auto-discovered when placed next to your mods.
@@ -36,6 +37,12 @@ workers = 4
 
 # Output directory for translated mods (relative to config file or absolute)
 # output = "./translated_mods"
+
+[mods]
+# Glob patterns for mods to include (default: all mods)
+# include = ["*"]
+# Glob patterns for mods to exclude
+# exclude = ["test_*", "example_*"]
 """
 
 
@@ -92,6 +99,22 @@ def load_config(config_path: Path) -> dict[str, Any]:
                 config[key] = value
         else:
             logger.warning("Unknown config key: '%s' — ignoring", key)
+
+    mods_table = raw.get("mods", {})
+    if isinstance(mods_table, dict):
+        mods_config: dict[str, Any] = {}
+        for key, value in mods_table.items():
+            if key in VALID_MOD_KEYS:
+                if isinstance(value, list):
+                    mods_config[key] = [str(v) for v in value]
+                elif isinstance(value, str):
+                    mods_config[key] = [value]
+                else:
+                    logger.warning("Mods config key '%s' must be a string or list, ignoring", key)
+            else:
+                logger.warning("Unknown mods config key: '%s' — ignoring", key)
+        if mods_config:
+            config["mods"] = mods_config
 
     return config
 

@@ -6,6 +6,8 @@ import zipfile
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from ..parsers import json_parser, lang_parser, mcfunction_parser
+from ..utils.progress import ProgressReporter
+from ..utils.stats import FileStats, ModStats, OverallStats
 from .settings import Settings
 from .translator import Translator
 
@@ -18,14 +20,17 @@ MCFUNCTION = ".mcfunction"
 
 
 class FileManager:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, reporter: ProgressReporter | None = None) -> None:
         self.temp_path = settings.temp_path
         self.translation_path = settings.translation_path
         self.mods_path = settings.mods_path
         self.settings = settings
+        self.reporter = reporter or ProgressReporter()
 
         self.source_mc_lang = settings.source_mc_lang
         self.target_mc_lang = settings.target_mc_lang
+
+        self.overall_stats: OverallStats | None = None
 
         logger.info("Using %s translator...", settings.provider)
         try:
@@ -49,15 +54,24 @@ class FileManager:
         os.makedirs(self.temp_path, exist_ok=True)
         os.makedirs(self.translation_path, exist_ok=True)
 
-    def unpack_mods(self) -> None:
-        mod_list = os.listdir(self.mods_path)
-        for mod_name in mod_list:
-            if mod_name.endswith(JAR):
-                mod_file_path = os.path.join(self.mods_path, mod_name)
-                unpacking_destination = os.path.join(self.temp_path, mod_name)
-                with ZipFile(mod_file_path, "r") as zip:
-                    logger.info("Unpacking %s...", mod_name)
-                    zip.extractall(unpacking_destination)
+    def unpack_mods(self, selected_mods: list[str] | None = None) -> None:
+        mod_list = sorted(
+            [m for m in os.listdir(self.mods_path) if m.endswith(JAR)],
+            key=lambda n: n.lower(),
+        )
+
+        if selected_mods is not None:
+            selected_set = set(selected_mods)
+            mod_list = [m for m in mod_list if m in selected_set]
+
+        self.reporter.report_message(f"Unpacking {len(mod_list)} mod(s)...")
+
+        for idx, mod_name in enumerate(mod_list):
+            mod_file_path = os.path.join(self.mods_path, mod_name)
+            unpacking_destination = os.path.join(self.temp_path, mod_name)
+            with ZipFile(mod_file_path, "r") as zip:
+                logger.info("Unpacking %s...", mod_name)
+                zip.extractall(unpacking_destination)
 
     def get_lang_folders(self) -> list[str]:
         lang_folders: list[str] = []
@@ -95,7 +109,7 @@ class FileManager:
                     mod_path_parts = parent_folder.split(os.sep)
                     mod_name = mod_path_parts[1] if len(mod_path_parts) > 1 else "unknown"
                     logger.info("Found language file outside standard lang folder: %s", folder)
-                    logger.info("Using parent folder: %s", parent_folder)
+                    logger.info("Using parent folder: %s (%s)", parent_folder, mod_name)
 
         mcfunction_folders = self.get_mcfunction_folders()
         for folder in mcfunction_folders:
@@ -134,13 +148,19 @@ class FileManager:
         return mcfunction_folders
 
     def edit_lang_files(self, lang_folders: list[str]) -> None:
+        self.overall_stats = OverallStats()
+        self.overall_stats.start()
+
         for lang_folder in lang_folders:
             path_parts = lang_folder.split(os.sep)
             if len(path_parts) > 1:
-                mod_name = path_parts[1]
-                mod_name = mod_name.replace(JAR, "")
+                mod_name = path_parts[1].replace(JAR, "")
             else:
                 mod_name = "unknown-mod"
+
+            mod_stats = ModStats(name=mod_name)
+            mod_stats.start()
+            self.reporter.report_mod_start(mod_name, file_count=0, entry_count=0)
 
             logger.info("Processing %s...", mod_name)
 
@@ -152,26 +172,25 @@ class FileManager:
             files_processed = False
 
             if os.path.exists(source_json_path):
-                logger.info("Creating %s%s from %s%s...", self.target_mc_lang.lower(), JSON, self.source_mc_lang.lower(), JSON)
-                original_data = self._read_json_file(source_json_path)
-                if original_data:
-                    translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
-                    self._write_json_file(translated_data, target_json_path)
-                    logger.info("Successfully translated JSON file for %s", mod_name)
-                    files_processed = True
-                else:
-                    logger.info("No data found in source JSON file for %s", mod_name)
+                logger.info(
+                    "Creating %s%s from %s%s...",
+                    self.target_mc_lang.lower(), JSON, self.source_mc_lang.lower(), JSON,
+                )
+                file_stats = self._translate_file(
+                    source_json_path, target_json_path, "json", mod_name,
+                )
+                mod_stats.files.append(file_stats)
+                logger.info("Successfully translated JSON file for %s", mod_name)
+                files_processed = True
 
             if os.path.exists(source_lang_path):
                 logger.info("Creating %s%s from %s%s...", self.target_mc_lang, LANG, self.source_mc_lang, LANG)
-                original_data = self._read_lang_file(source_lang_path)
-                if original_data:
-                    translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
-                    self._write_lang_file(translated_data, target_lang_path)
-                    logger.info("Successfully translated LANG file for %s", mod_name)
-                    files_processed = True
-                else:
-                    logger.info("No data found in source LANG file for %s", mod_name)
+                file_stats = self._translate_file(
+                    source_lang_path, target_lang_path, "lang", mod_name,
+                )
+                mod_stats.files.append(file_stats)
+                logger.info("Successfully translated LANG file for %s", mod_name)
+                files_processed = True
 
             if not files_processed:
                 logger.info("Searching for alternative source files in %s...", lang_folder)
@@ -182,23 +201,23 @@ class FileManager:
                         source_file_path = os.path.join(lang_folder, filename)
                         target_file_path = os.path.join(lang_folder, f"{self.target_mc_lang.lower()}{JSON}")
                         logger.info("Creating %s%s from %s...", self.target_mc_lang.lower(), JSON, filename)
-                        original_data = self._read_json_file(source_file_path)
-                        if original_data:
-                            translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
-                            self._write_json_file(translated_data, target_file_path)
-                            logger.info("Successfully translated JSON file for %s", mod_name)
-                            files_processed = True
+                        file_stats = self._translate_file(
+                            source_file_path, target_file_path, "json", mod_name,
+                        )
+                        mod_stats.files.append(file_stats)
+                        logger.info("Successfully translated JSON file for %s", mod_name)
+                        files_processed = True
 
                     elif lower_filename == f"{self.source_mc_lang}{LANG}".lower():
                         source_file_path = os.path.join(lang_folder, filename)
                         target_file_path = os.path.join(lang_folder, f"{self.target_mc_lang}{LANG}")
                         logger.info("Creating %s%s from %s...", self.target_mc_lang, LANG, filename)
-                        original_data = self._read_lang_file(source_file_path)
-                        if original_data:
-                            translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
-                            self._write_lang_file(translated_data, target_file_path)
-                            logger.info("Successfully translated LANG file for %s", mod_name)
-                            files_processed = True
+                        file_stats = self._translate_file(
+                            source_file_path, target_file_path, "lang", mod_name,
+                        )
+                        mod_stats.files.append(file_stats)
+                        logger.info("Successfully translated LANG file for %s", mod_name)
+                        files_processed = True
 
             if not files_processed:
                 logger.info("No translatable language files found for %s", mod_name)
@@ -207,8 +226,110 @@ class FileManager:
             lang_folder_parts = lang_folder.split(os.sep)
             if len(lang_folder_parts) == len(temp_path_parts) + 1:
                 logger.info("Checking for .mcfunction files in %s...", mod_name)
-                self.translate_mcfunction_files(lang_folder)
-                files_processed = True
+                mcfunction_stats = self._translate_mcfunction_with_stats(lang_folder, mod_name)
+                mod_stats.files.extend(mcfunction_stats)
+                if mcfunction_stats:
+                    files_processed = True
+
+            mod_stats.finish()
+            self.reporter.report_mod_complete(
+                mod_name, mod_stats.translated_entries, mod_stats.total_entries, mod_stats.failed_entries,
+            )
+            self.overall_stats.mods.append(mod_stats)
+
+            completed = sum(1 for m in self.overall_stats.mods if not m.skipped) if self.overall_stats else 0
+            self.reporter.report_overall_progress(
+                completed, len(lang_folders),
+                self.overall_stats.translated_entries, self.overall_stats.total_entries,
+            )
+
+        if self.overall_stats:
+            self.overall_stats.finish()
+            self.overall_stats.provider = self.settings.provider
+            self.overall_stats.source_lang = self.settings.source_mc_lang
+            self.overall_stats.target_lang = self.settings.target_mc_lang
+
+    def _translate_file(
+        self, source_path: str, target_path: str, file_type: str, mod_name: str,
+    ) -> FileStats:
+        file_stats = FileStats(path=source_path, file_type=file_type)
+        file_stats.start()
+        self.reporter.report_mod_file_start(mod_name, source_path, 0)
+
+        if file_type == "json":
+            original_data = self._read_json_file(source_path)
+        elif file_type == "lang":
+            original_data = self._read_lang_file(source_path)
+        else:
+            return file_stats
+
+        if not original_data:
+            file_stats.finish()
+            self.reporter.report_mod_file_complete(mod_name, source_path, file_stats.duration_ms, 0)
+            return file_stats
+
+        file_stats.entries_total = len(original_data)
+
+        try:
+            translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
+            file_stats.add_translated(len(translated_data))
+            for key, val in translated_data.items():
+                if val == original_data.get(key, ""):
+                    file_stats.entries_failed += 1
+                    file_stats.entries_translated -= 1
+        except Exception as e:
+            logger.error("Translation failed for %s: %s", source_path, e)
+            translated_data = original_data
+            file_stats.add_failed(len(original_data))
+
+        if file_type == "json":
+            self._write_json_file(translated_data, target_path)
+        elif file_type == "lang":
+            self._write_lang_file(translated_data, target_path)
+
+        file_stats.finish()
+        self.reporter.report_mod_file_complete(
+            mod_name, source_path, file_stats.duration_ms, file_stats.entries_failed,
+        )
+        return file_stats
+
+    def _translate_mcfunction_with_stats(self, mod_root_path: str, mod_name: str) -> list[FileStats]:
+        mcfunction_files = []
+        for foldername, _, filenames in os.walk(mod_root_path):
+            for filename in filenames:
+                if filename.endswith(MCFUNCTION):
+                    file_path = os.path.join(foldername, filename)
+                    mcfunction_files.append(file_path)
+
+        if not mcfunction_files:
+            return []
+
+        logger.info("Found %d .mcfunction files to translate", len(mcfunction_files))
+        result: list[FileStats] = []
+
+        for file_path in mcfunction_files:
+            file_stats = FileStats(path=file_path, file_type="mcfunction")
+            file_stats.start()
+            self.reporter.report_mod_file_start(mod_name, file_path, 0)
+
+            logger.info("Processing %s", file_path)
+            original_data = self._read_mcfunction_file(file_path)
+            if original_data:
+                file_stats.entries_total = len(original_data)
+                translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
+                file_stats.add_translated(len(translated_data))
+                self._write_mcfunction_file(file_path, translated_data)
+                logger.info("Successfully translated %d strings in %s", len(original_data), file_path)
+            else:
+                logger.info("No translatable content found in %s", file_path)
+
+            file_stats.finish()
+            self.reporter.report_mod_file_complete(
+                mod_name, file_path, file_stats.duration_ms, file_stats.entries_failed,
+            )
+            result.append(file_stats)
+
+        return result
 
     def _read_json_file(self, path: str) -> dict[str, str]:
         try:
@@ -297,9 +418,11 @@ class FileManager:
 
     def convert_translated_mods(self) -> None:
         mod_folder_list = os.listdir(self.temp_path)
-        for mod_folder in mod_folder_list:
+        self.reporter.report_repack_start(len(mod_folder_list))
+
+        for idx, mod_folder in enumerate(mod_folder_list):
             logger.info("Converting %s into mod file...", mod_folder)
-            unpacked_mod_path = os.path.join(self.temp_path, mod_folder)
+            unacked_mod_path = os.path.join(self.temp_path, mod_folder)
 
             same_paths = os.path.abspath(self.mods_path) == os.path.abspath(self.translation_path)
             if same_paths:
@@ -307,7 +430,10 @@ class FileManager:
             else:
                 translation_path = os.path.join(self.translation_path, mod_folder)
 
-            self._convert_folder_to_jar(unpacked_mod_path, translation_path)
+            self.reporter.report_repack_progress(idx + 1, len(mod_folder_list), mod_folder)
+            self._convert_folder_to_jar(unacked_mod_path, translation_path)
+
+        self.reporter.report_repack_complete(len(mod_folder_list))
 
     def _convert_folder_to_jar(self, folder_path: str, jar_path: str) -> None:
         logger.info("Creating JAR file: %s", jar_path)
@@ -342,7 +468,9 @@ class FileManager:
                     logger.info("Translating source file: %s", filename)
                     original_data = self._read_json_file(source_path)
                     if original_data:
-                        translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
+                        translated_data = self.translator.translate_data(
+                            original_data, max_workers=self.settings.max_workers,
+                        )
                         self._write_json_file(translated_data, target_path)
                         relative_path = os.path.relpath(target_path, folder_path)
                         lang_files_found.append(relative_path)
@@ -350,7 +478,9 @@ class FileManager:
                     logger.info("Translating source file: %s", filename)
                     original_data = self._read_lang_file(source_path)
                     if original_data:
-                        translated_data = self.translator.translate_data(original_data, max_workers=self.settings.max_workers)
+                        translated_data = self.translator.translate_data(
+                            original_data, max_workers=self.settings.max_workers,
+                        )
                         self._write_lang_file(translated_data, target_path)
                         relative_path = os.path.relpath(target_path, folder_path)
                         lang_files_found.append(relative_path)

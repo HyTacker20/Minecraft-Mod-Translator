@@ -14,8 +14,8 @@ from pyfiglet import Figlet
 from rich import box
 from rich.align import Align
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
@@ -23,175 +23,176 @@ from rich.theme import Theme
 from ..commands.translate import (
     handle_translate_command,
 )
+from ..core.config_loader import find_config_file, load_config
+from ..core.mod_scanner import ModInfo, ModScanner
 from ..core.provider_check import check_provider_available
 from ..logging_config import setup_logging
 from ..utils.progress import ProgressReporter
 
-# Setup console and theme
-UI_THEME = Theme({
-    "primary": "white",
-    "secondary": "bright_black",
-    "accent": "red",
-    "warning": "bold red",
-    "error": "bold red",
-})
+UI_THEME = Theme(
+    {
+        "primary": "white",
+        "secondary": "bright_black",
+        "accent": "red",
+        "warning": "bold red",
+        "error": "bold red",
+    }
+)
 
-QUESTIONARY_STYLE = questionary.Style([
-    ("qmark", "fg:#FF5555 bold"),
-    ("question", "fg:#FFFFFF"),
-    ("answer", "fg:#AAAAAA"),
-    ("pointer", "fg:#666666 bold"),
-    ("highlighted", "fg:#FF5555 bold"),
-    ("selected", "fg:#AAAAAA"),
-    ("separator", "fg:#AAAAAA"),
-    ("instruction", "fg:#AAAAAA"),
-    ("text", "fg:#AAAAAA"),
-])
+QUESTIONARY_STYLE = questionary.Style(
+    [
+        ("qmark", "fg:#FF5555 bold"),
+        ("question", "fg:#FFFFFF"),
+        ("answer", "fg:#AAAAAA"),
+        ("pointer", "fg:#666666 bold"),
+        ("highlighted", "fg:#FF5555 bold"),
+        ("selected", "fg:#AAAAAA"),
+        ("separator", "fg:#AAAAAA"),
+        ("instruction", "fg:#AAAAAA"),
+        ("text", "fg:#AAAAAA"),
+    ]
+)
 
-# Create a rich console for fancy output
 console = Console(theme=UI_THEME)
+
 
 def display_title() -> None:
     """Display the application title using figlet."""
-    # Clear the console before showing the title
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
 
-    # Set the console window title
-    if os.name == 'nt':
-        os.system('title Minecraft Mod Translator')
+    if os.name == "nt":
+        os.system("title Minecraft Mod Translator")
 
-    f = Figlet(font='chunky')
-    title1 = f.renderText('Minecraft Mod')
-    title2 = f.renderText('Translator')
+    f = Figlet(font="chunky")
+    title1 = f.renderText("Minecraft Mod")
+    title2 = f.renderText("Translator")
     console.print(Align.center(Text(title1, style="bold red")))
     console.print(Align.center(Text(title2, style="bold red")))
     console.print(Align.center(Text("Translate your Minecraft mods from one language to another", style="italic")))
     console.print()
 
-def get_user_input() -> dict[str, Any]:
+
+def get_user_input(config_data: dict[str, Any] | None = None) -> dict[str, Any]:
     """Collect user input through a form interface."""
+    if config_data is None:
+        config_data = {}
     try:
-        # Prepare common language options
         language_options = [
-            {'name': 'Afrikaans (af_ZA)', 'value': 'af_ZA'},
-            {'name': 'Albanian (sq_AL)', 'value': 'sq_AL'},
-            {'name': 'Arabic (ar_SA)', 'value': 'ar_SA'},
-            {'name': 'Armenian (hy_AM)', 'value': 'hy_AM'},
-            {'name': 'Asturian (ast_ES)', 'value': 'ast_ES'},
-            {'name': 'Azerbaijani (az_AZ)', 'value': 'az_AZ'},
-            {'name': 'Basque (eu_ES)', 'value': 'eu_ES'},
-            {'name': 'Belarusian (be_BY)', 'value': 'be_BY'},
-            {'name': 'Bosnian (bs_BA)', 'value': 'bs_BA'},
-            {'name': 'Bulgarian (bg_BG)', 'value': 'bg_BG'},
-            {'name': 'Catalan (ca_ES)', 'value': 'ca_ES'},
-            {'name': 'Chinese Simplified (zh_CN)', 'value': 'zh_CN'},
-            {'name': 'Chinese Traditional (zh_TW)', 'value': 'zh_TW'},
-            {'name': 'Cornish (kw_GB)', 'value': 'kw_GB'},
-            {'name': 'Croatian (hr_HR)', 'value': 'hr_HR'},
-            {'name': 'Czech (cs_CZ)', 'value': 'cs_CZ'},
-            {'name': 'Danish (da_DK)', 'value': 'da_DK'},
-            {'name': 'Dutch (nl_NL)', 'value': 'nl_NL'},
-            {'name': 'English United States (en_US)', 'value': 'en_US'},
-            {'name': 'English Australia (en_AU)', 'value': 'en_AU'},
-            {'name': 'English Canada (en_CA)', 'value': 'en_CA'},
-            {'name': 'English New Zealand (en_NZ)', 'value': 'en_NZ'},
-            {'name': 'English United Kingdom (en_GB)', 'value': 'en_GB'},
-            {'name': 'Esperanto (eo_UY)', 'value': 'eo_UY'},
-            {'name': 'Estonian (et_EE)', 'value': 'et_EE'},
-            {'name': 'Faroese (fo_FO)', 'value': 'fo_FO'},
-            {'name': 'Filipino (fil_PH)', 'value': 'fil_PH'},
-            {'name': 'Finnish (fi_FI)', 'value': 'fi_FI'},
-            {'name': 'French France (fr_FR)', 'value': 'fr_FR'},
-            {'name': 'French Canada (fr_CA)', 'value': 'fr_CA'},
-            {'name': 'Frisian (fy_NL)', 'value': 'fy_NL'},
-            {'name': 'Galician (gl_ES)', 'value': 'gl_ES'},
-            {'name': 'Georgian (ka_GE)', 'value': 'ka_GE'},
-            {'name': 'German (de_DE)', 'value': 'de_DE'},
-            {'name': 'Greek (el_GR)', 'value': 'el_GR'},
-            {'name': 'Hawaiian (haw)', 'value': 'haw'},
-            {'name': 'Hebrew (he_IL)', 'value': 'he_IL'},
-            {'name': 'Hindi (hi_IN)', 'value': 'hi_IN'},
-            {'name': 'Hungarian (hu_HU)', 'value': 'hu_HU'},
-            {'name': 'Icelandic (is_IS)', 'value': 'is_IS'},
-            {'name': 'Indonesian (id_ID)', 'value': 'id_ID'},
-            {'name': 'Irish (ga_IE)', 'value': 'ga_IE'},
-            {'name': 'Italian (it_IT)', 'value': 'it_IT'},
-            {'name': 'Japanese (ja_JP)', 'value': 'ja_JP'},
-            {'name': 'Kabyle (kab_DZ)', 'value': 'kab_DZ'},
-            {'name': 'Kannada (kn_IN)', 'value': 'kn_IN'},
-            {'name': 'Korean (ko_KR)', 'value': 'ko_KR'},
-            {'name': 'Kölsch/Ripuarian (ksh_DE)', 'value': 'ksh_DE'},
-            {'name': 'Latin (la_VA)', 'value': 'la_VA'},
-            {'name': 'Latvian (lv_LV)', 'value': 'lv_LV'},
-            {'name': 'Limburgish (li_LI)', 'value': 'li_LI'},
-            {'name': 'Lithuanian (lt_LT)', 'value': 'lt_LT'},
-            {'name': 'Low German (nds_DE)', 'value': 'nds_DE'},
-            {'name': 'Luxembourgish (lb_LU)', 'value': 'lb_LU'},
-            {'name': 'Macedonian (mk_MK)', 'value': 'mk_MK'},
-            {'name': 'Malay (ms_MY)', 'value': 'ms_MY'},
-            {'name': 'Maltese (mt_MT)', 'value': 'mt_MT'},
-            {'name': 'Manx (gv_IM)', 'value': 'gv_IM'},
-            {'name': 'Māori (mi_NZ)', 'value': 'mi_NZ'},
-            {'name': 'Mohawk (moh_US)', 'value': 'moh_US'},
-            {'name': 'Mongolian (mn_MN)', 'value': 'mn_MN'},
-            {'name': 'Northern Sami (sme)', 'value': 'sme'},
-            {'name': 'Norwegian Bokmål (no_NO)', 'value': 'no_NO'},
-            {'name': 'Norwegian Nynorsk (nn_NO)', 'value': 'nn_NO'},
-            {'name': 'Nuu-chah-nulth (nuk)', 'value': 'nuk'},
-            {'name': 'Occitan (oc_FR)', 'value': 'oc_FR'},
-            {'name': 'Ojibwe (oj_CA)', 'value': 'oj_CA'},
-            {'name': 'Persian (fa_IR)', 'value': 'fa_IR'},
-            {'name': 'Polish (pl_PL)', 'value': 'pl_PL'},
-            {'name': 'Portuguese Portugal (pt_PT)', 'value': 'pt_PT'},
-            {'name': 'Portuguese Brazil (pt_BR)', 'value': 'pt_BR'},
-            {'name': 'Romanian (ro_RO)', 'value': 'ro_RO'},
-            {'name': 'Russian (ru_RU)', 'value': 'ru_RU'},
-            {'name': 'Scottish Gaelic (gd_GB)', 'value': 'gd_GB'},
-            {'name': 'Serbian (sr_SP)', 'value': 'sr_SP'},
-            {'name': 'Slovak (sk_SK)', 'value': 'sk_SK'},
-            {'name': 'Slovenian (sl_SI)', 'value': 'sl_SI'},
-            {'name': 'Somali (so_SO)', 'value': 'so_SO'},
-            {'name': 'Spanish Spain (es_ES)', 'value': 'es_ES'},
-            {'name': 'Spanish Argentina (es_AR)', 'value': 'es_AR'},
-            {'name': 'Spanish Chile (es_CL)', 'value': 'es_CL'},
-            {'name': 'Spanish Mexico (es_MX)', 'value': 'es_MX'},
-            {'name': 'Spanish Uruguay (es_UY)', 'value': 'es_UY'},
-            {'name': 'Spanish Venezuela (es_VE)', 'value': 'es_VE'},
-            {'name': 'Swedish (sv_SE)', 'value': 'sv_SE'},
-            {'name': 'Thai (th_TH)', 'value': 'th_TH'},
-            {'name': 'Turkish (tr_TR)', 'value': 'tr_TR'},
-            {'name': 'Ukrainian (uk_UA)', 'value': 'uk_UA'},
-            {'name': 'Vietnamese (vi_VN)', 'value': 'vi_VN'},
-            {'name': 'Welsh (cy_GB)', 'value': 'cy_GB'}
+            {"name": "Afrikaans (af_ZA)", "value": "af_ZA"},
+            {"name": "Albanian (sq_AL)", "value": "sq_AL"},
+            {"name": "Arabic (ar_SA)", "value": "ar_SA"},
+            {"name": "Armenian (hy_AM)", "value": "hy_AM"},
+            {"name": "Asturian (ast_ES)", "value": "ast_ES"},
+            {"name": "Azerbaijani (az_AZ)", "value": "az_AZ"},
+            {"name": "Basque (eu_ES)", "value": "eu_ES"},
+            {"name": "Belarusian (be_BY)", "value": "be_BY"},
+            {"name": "Bosnian (bs_BA)", "value": "bs_BA"},
+            {"name": "Bulgarian (bg_BG)", "value": "bg_BG"},
+            {"name": "Catalan (ca_ES)", "value": "ca_ES"},
+            {"name": "Chinese Simplified (zh_CN)", "value": "zh_CN"},
+            {"name": "Chinese Traditional (zh_TW)", "value": "zh_TW"},
+            {"name": "Cornish (kw_GB)", "value": "kw_GB"},
+            {"name": "Croatian (hr_HR)", "value": "hr_HR"},
+            {"name": "Czech (cs_CZ)", "value": "cs_CZ"},
+            {"name": "Danish (da_DK)", "value": "da_DK"},
+            {"name": "Dutch (nl_NL)", "value": "nl_NL"},
+            {"name": "English United States (en_US)", "value": "en_US"},
+            {"name": "English Australia (en_AU)", "value": "en_AU"},
+            {"name": "English Canada (en_CA)", "value": "en_CA"},
+            {"name": "English New Zealand (en_NZ)", "value": "en_NZ"},
+            {"name": "English United Kingdom (en_GB)", "value": "en_GB"},
+            {"name": "Esperanto (eo_UY)", "value": "eo_UY"},
+            {"name": "Estonian (et_EE)", "value": "et_EE"},
+            {"name": "Faroese (fo_FO)", "value": "fo_FO"},
+            {"name": "Filipino (fil_PH)", "value": "fil_PH"},
+            {"name": "Finnish (fi_FI)", "value": "fi_FI"},
+            {"name": "French France (fr_FR)", "value": "fr_FR"},
+            {"name": "French Canada (fr_CA)", "value": "fr_CA"},
+            {"name": "Frisian (fy_NL)", "value": "fy_NL"},
+            {"name": "Galician (gl_ES)", "value": "gl_ES"},
+            {"name": "Georgian (ka_GE)", "value": "ka_GE"},
+            {"name": "German (de_DE)", "value": "de_DE"},
+            {"name": "Greek (el_GR)", "value": "el_GR"},
+            {"name": "Hawaiian (haw)", "value": "haw"},
+            {"name": "Hebrew (he_IL)", "value": "he_IL"},
+            {"name": "Hindi (hi_IN)", "value": "hi_IN"},
+            {"name": "Hungarian (hu_HU)", "value": "hu_HU"},
+            {"name": "Icelandic (is_IS)", "value": "is_IS"},
+            {"name": "Indonesian (id_ID)", "value": "id_ID"},
+            {"name": "Irish (ga_IE)", "value": "ga_IE"},
+            {"name": "Italian (it_IT)", "value": "it_IT"},
+            {"name": "Japanese (ja_JP)", "value": "ja_JP"},
+            {"name": "Kabyle (kab_DZ)", "value": "kab_DZ"},
+            {"name": "Kannada (kn_IN)", "value": "kn_IN"},
+            {"name": "Korean (ko_KR)", "value": "ko_KR"},
+            {"name": "Kölsch/Ripuarian (ksh_DE)", "value": "ksh_DE"},
+            {"name": "Latin (la_VA)", "value": "la_VA"},
+            {"name": "Latvian (lv_LV)", "value": "lv_LV"},
+            {"name": "Limburgish (li_LI)", "value": "li_LI"},
+            {"name": "Lithuanian (lt_LT)", "value": "lt_LT"},
+            {"name": "Low German (nds_DE)", "value": "nds_DE"},
+            {"name": "Luxembourgish (lb_LU)", "value": "lb_LU"},
+            {"name": "Macedonian (mk_MK)", "value": "mk_MK"},
+            {"name": "Malay (ms_MY)", "value": "ms_MY"},
+            {"name": "Maltese (mt_MT)", "value": "mt_MT"},
+            {"name": "Manx (gv_IM)", "value": "gv_IM"},
+            {"name": "Māori (mi_NZ)", "value": "mi_NZ"},
+            {"name": "Mohawk (moh_US)", "value": "moh_US"},
+            {"name": "Mongolian (mn_MN)", "value": "mn_MN"},
+            {"name": "Northern Sami (sme)", "value": "sme"},
+            {"name": "Norwegian Bokmål (no_NO)", "value": "no_NO"},
+            {"name": "Norwegian Nynorsk (nn_NO)", "value": "nn_NO"},
+            {"name": "Nuu-chah-nulth (nuk)", "value": "nuk"},
+            {"name": "Occitan (oc_FR)", "value": "oc_FR"},
+            {"name": "Ojibwe (oj_CA)", "value": "oj_CA"},
+            {"name": "Persian (fa_IR)", "value": "fa_IR"},
+            {"name": "Polish (pl_PL)", "value": "pl_PL"},
+            {"name": "Portuguese Portugal (pt_PT)", "value": "pt_PT"},
+            {"name": "Portuguese Brazil (pt_BR)", "value": "pt_BR"},
+            {"name": "Romanian (ro_RO)", "value": "ro_RO"},
+            {"name": "Russian (ru_RU)", "value": "ru_RU"},
+            {"name": "Scottish Gaelic (gd_GB)", "value": "gd_GB"},
+            {"name": "Serbian (sr_SP)", "value": "sr_SP"},
+            {"name": "Slovak (sk_SK)", "value": "sk_SK"},
+            {"name": "Slovenian (sl_SI)", "value": "sl_SI"},
+            {"name": "Somali (so_SO)", "value": "so_SO"},
+            {"name": "Spanish Spain (es_ES)", "value": "es_ES"},
+            {"name": "Spanish Argentina (es_AR)", "value": "es_AR"},
+            {"name": "Spanish Chile (es_CL)", "value": "es_CL"},
+            {"name": "Spanish Mexico (es_MX)", "value": "es_MX"},
+            {"name": "Spanish Uruguay (es_UY)", "value": "es_UY"},
+            {"name": "Spanish Venezuela (es_VE)", "value": "es_VE"},
+            {"name": "Swedish (sv_SE)", "value": "sv_SE"},
+            {"name": "Thai (th_TH)", "value": "th_TH"},
+            {"name": "Turkish (tr_TR)", "value": "tr_TR"},
+            {"name": "Ukrainian (uk_UA)", "value": "uk_UA"},
+            {"name": "Vietnamese (vi_VN)", "value": "vi_VN"},
+            {"name": "Welsh (cy_GB)", "value": "cy_GB"},
         ]
 
-        # Create a lookup dictionary for language names
         language_names = {option["value"]: option["name"] for option in language_options}
 
-        # Get the mods path
         mods_path = questionary.text(
-            "Path to mods folder:",
-            default=os.path.join(os.getcwd(), "mods"),
-            style=QUESTIONARY_STYLE
+            "Path to mods folder:", default=os.path.join(os.getcwd(), "mods"), style=QUESTIONARY_STYLE
         ).ask()
 
-        if mods_path is None:  # This occurs when user presses Ctrl+C
+        if mods_path is None:
             sys.exit(0)
 
         if not mods_path:
             console.print("[bold red]Path is required. Exiting.[/bold red]")
             sys.exit(1)
 
-        # Make sure path exists
         if not os.path.exists(mods_path):
             console.print(f"[bold red]Path '{mods_path}' does not exist. Exiting.[/bold red]")
             sys.exit(1)
 
-        # Normalize path
         mods_path = os.path.abspath(mods_path)
-          # Get source language - using English (en_US) as default
-        # Find the en_US option to use as default
-        default_source = next((option for option in language_options if option["value"] == "en_US"), language_options[0])
+
+        config_source = config_data.get("source", "en_US")
+        default_source = next(
+            (option for option in language_options if option["value"] == config_source), language_options[0]
+        )
 
         source_lang = questionary.select(
             "Source language:",
@@ -200,17 +201,19 @@ def get_user_input() -> dict[str, Any]:
             instruction="(Use ↑↓ and Enter, or type to search)",
             style=QUESTIONARY_STYLE,
             use_jk_keys=False,
-            use_search_filter=True
+            use_search_filter=True,
         ).ask()
 
-        if source_lang is None:  # This occurs when user presses Ctrl+C
+        if source_lang is None:
             sys.exit(0)
 
-        # Get target language - filter out the source language
         target_language_options = [option for option in language_options if option["value"] != source_lang]
 
-        # Find the first available option as default
-        default_target = target_language_options[0]
+        config_target = config_data.get("target", "")
+        default_target = next(
+            (option for option in target_language_options if option["value"] == config_target),
+            target_language_options[0],
+        )
 
         target_lang = questionary.select(
             "Target language:",
@@ -219,13 +222,12 @@ def get_user_input() -> dict[str, Any]:
             instruction="(Use ↑↓ and Enter, or type to search)",
             style=QUESTIONARY_STYLE,
             use_jk_keys=False,
-            use_search_filter=True
+            use_search_filter=True,
         ).ask()
 
-        if target_lang is None:  # This occurs when user presses Ctrl+C
+        if target_lang is None:
             sys.exit(0)
 
-        # Check which providers are available
         providers = [
             ("google", "Google Translate (Free)", "Always available"),
             ("openai", "OpenAI (GPT-4o-mini)", "OPENAI_API_KEY"),
@@ -239,21 +241,26 @@ def get_user_input() -> dict[str, Any]:
         for provider_key, label, requirement in providers:
             available, status_msg = check_provider_available(provider_key)
             if available:
-                translation_choices.append(
-                    {"name": f"{label} ✅ ({status_msg})", "value": provider_key}
-                )
+                translation_choices.append({"name": f"{label} ✅ ({status_msg})", "value": provider_key})
             else:
                 translation_choices.append(
                     {"name": f"{label} ❌ ({status_msg})", "value": f"{provider_key}_unavailable"}
                 )
 
+        config_provider = config_data.get("provider", "")
+        default_translation = translation_choices[0]
+        if config_provider:
+            matching = next((c for c in translation_choices if c["value"] == config_provider), None)
+            if matching:
+                default_translation = matching
+
         translation_method = questionary.select(
             "Choose translation method:",
             choices=translation_choices,
-            default=translation_choices[0],
+            default=default_translation,
             instruction="(Use ↑↓ and Enter)",
             style=QUESTIONARY_STYLE,
-            use_jk_keys=False
+            use_jk_keys=False,
         ).ask()
 
         if translation_method is None:
@@ -267,42 +274,43 @@ def get_user_input() -> dict[str, Any]:
             console.print("\nFalling back to Google Translate...\n")
             translation_method = "google"
 
-        # Get output path
+        config_output = config_data.get("output", "")
+        default_output_choice = "replace"
+        if config_output:
+            default_output_choice = "new_folder"
+
         output_choice = questionary.select(
             "Where to save translated mods?",
             choices=[
                 {"name": "Replace original mods", "value": "replace"},
-                {"name": "Save to a different folder", "value": "new_folder"}
+                {"name": "Save to a different folder", "value": "new_folder"},
             ],
+            default={"name": "Save to a different folder", "value": "new_folder"}
+            if default_output_choice == "new_folder"
+            else {"name": "Replace original mods", "value": "replace"},
             instruction="(Use ↑↓ and Enter, or type to search)",
             style=QUESTIONARY_STYLE,
             use_jk_keys=False,
-            use_search_filter=True
+            use_search_filter=True,
         ).ask()
 
-        if output_choice is None:  # This occurs when user presses Ctrl+C
+        if output_choice is None:
             sys.exit(0)
 
         output_path = mods_path
         if output_choice == "new_folder":
-            # Get the output path for translated mods
-            default_output = os.path.join(os.path.dirname(mods_path), "translated_mods")
-            output_path = questionary.text(
-                "Output folder path:",
-                default=default_output,
-                style=QUESTIONARY_STYLE
-            ).ask()
+            default_output = (
+                config_output if config_output else os.path.join(os.path.dirname(mods_path), "translated_mods")
+            )
+            output_path = questionary.text("Output folder path:", default=default_output, style=QUESTIONARY_STYLE).ask()
 
-            if output_path is None:  # This occurs when user presses Ctrl+C
+            if output_path is None:
                 sys.exit(0)
 
-            # Create output directory if it doesn't exist
             os.makedirs(output_path, exist_ok=True)
 
-        # Clear the console before showing confirmation
-        os.system('cls' if os.name == 'nt' else 'clear')
+        os.system("cls" if os.name == "nt" else "clear")
 
-        # Confirm user choices with rich formatting
         console.print("\n[bold]Please confirm your choices:[/bold]")
 
         confirmation_table = Table(show_header=False, box=box.SIMPLE)
@@ -324,11 +332,10 @@ def get_user_input() -> dict[str, Any]:
             style=QUESTIONARY_STYLE,
         ).ask()
 
-        if confirmed is None or not confirmed:  # This occurs when user presses Ctrl+C or selects No
+        if confirmed is None or not confirmed:
             sys.exit(0)
 
-        # Clear the console after confirmation
-        os.system('cls' if os.name == 'nt' else 'clear')
+        os.system("cls" if os.name == "nt" else "clear")
 
         return {
             "path": mods_path,
@@ -338,10 +345,78 @@ def get_user_input() -> dict[str, Any]:
             "provider": translation_method,
         }
     except KeyboardInterrupt:
-        # Silently exit on Ctrl+C without showing any error message
         sys.exit(0)
 
-def run_translation(params: dict[str, Any]) -> None:
+
+def _format_size(size_bytes: int) -> str:
+    if size_bytes >= 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    if size_bytes >= 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes} B"
+
+
+def _build_mod_choice(mod: ModInfo) -> str:
+    size = _format_size(mod.size_bytes)
+    if mod.has_lang_files:
+        mc_info = f", {mod.mcfunction_count} mcfunc" if mod.mcfunction_count else ""
+        return f"{mod.name}  [{mod.lang_file_count} files{mc_info}, ~{mod.estimated_entries} entries, {size}]"
+    return f"{mod.name}  [no translatable content, {size}]"
+
+
+def select_mods(mods: list[ModInfo]) -> list[str]:
+    if not mods:
+        console.print("[bold yellow]No JAR files found in the mods folder.[/bold yellow]")
+        console.print()
+        input("Press Enter to exit...")
+        sys.exit(0)
+
+    translatable = [m for m in mods if m.has_lang_files]
+    if not translatable:
+        console.print("[bold yellow]No translatable mods found. All mods lack language files.[/bold yellow]")
+        console.print()
+        input("Press Enter to exit...")
+        sys.exit(0)
+
+    total = len(translatable)
+    mode = questionary.select(
+        f"Found {len(mods)} JAR(s), {total} with translatable content. How to proceed?",
+        choices=[
+            {"name": f"Translate all {total} mods", "value": "all"},
+            {"name": "Select individually", "value": "select"},
+        ],
+        style=QUESTIONARY_STYLE,
+    ).ask()
+
+    if mode is None:
+        sys.exit(0)
+
+    if mode == "all":
+        return [m.name for m in translatable]
+
+    choices = []
+    for mod in mods:
+        choices.append(
+            questionary.Choice(
+                title=_build_mod_choice(mod),
+                value=mod.name,
+                checked=False,
+            )
+        )
+
+    selected = questionary.checkbox(
+        "Select mods to translate (Space to toggle, Enter to confirm):",
+        choices=choices,
+        style=QUESTIONARY_STYLE,
+    ).ask()
+
+    if selected is None:
+        sys.exit(0)
+
+    return list(selected) if isinstance(selected, list) else []
+
+
+def run_translation(params: dict[str, Any], selected_mods: list[str]) -> None:
     try:
         debug = params.pop("debug", False)
         setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
@@ -353,15 +428,84 @@ def run_translation(params: dict[str, Any]) -> None:
 
         args = Args(**params)
 
-        with Progress(
-            SpinnerColumn(style="red"),
-            TextColumn("[bold red]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("[red]Unpacking mod files...", total=None)
+        progress_table = Table.grid()
+        progress_table.add_column()
+        progress_table.add_column()
 
-            reporter = ProgressReporter()
-            reporter.subscribe(lambda event, **kw: _handle_progress_event(event, progress, task, **kw))
+        inner_table = Table.grid()
+        inner_table.add_column()
+
+        reporter = ProgressReporter()
+        live_stats: dict[str, Any] = {
+            "phase": "Initializing...",
+            "mod_name": "",
+            "file_path": "",
+            "mods_done": 0,
+            "mods_total": 0,
+            "entries_done": 0,
+            "entries_total": 0,
+        }
+
+        def _on_progress(event: str, **kw: Any) -> None:
+            if event == "title":
+                live_stats["phase"] = kw.get("text", "")
+            elif event == "mod_start":
+                live_stats["mod_name"] = kw.get("mod_name", "")
+                live_stats["file_path"] = ""
+            elif event == "mod_file_start":
+                live_stats["file_path"] = kw.get("file_path", "")
+            elif event == "mod_complete":
+                live_stats["mods_done"] += 1
+                live_stats["mod_name"] = ""
+            elif event == "overall_progress":
+                live_stats["mods_done"] = kw.get("completed_mods", live_stats["mods_done"])
+                live_stats["mods_total"] = kw.get("total_mods", live_stats["mods_total"])
+                live_stats["entries_done"] = kw.get("completed_entries", live_stats["entries_done"])
+                live_stats["entries_total"] = kw.get("total_entries", live_stats["entries_total"])
+            elif event == "repack_progress":
+                live_stats["phase"] = f"Repacking: {kw.get('name', '')} ({kw.get('current', 0)}/{kw.get('total', 0)})"
+            elif event in ("scan_start", "scan_progress"):
+                live_stats["phase"] = f"Scanning mods: {kw.get('current', 0)}/{kw.get('total', 0)}"
+
+        reporter.subscribe(_on_progress)
+
+        def _build_progress_renderable() -> Table:
+            t = Table.grid()
+            t.add_column()
+
+            phase_color = "bold yellow"
+            if "Repacking" in live_stats["phase"]:
+                phase_color = "bold green"
+            elif "Translating" in live_stats["phase"] or live_stats["mod_name"]:
+                phase_color = "bold red"
+
+            t.add_row(Text(f"[{phase_color}]{live_stats['phase']}[/{phase_color}]"))
+
+            if live_stats["mod_name"]:
+                t.add_row(Text(f"  Mod: [white]{live_stats['mod_name']}[/white]"))
+            if live_stats["file_path"]:
+                short_path = live_stats["file_path"]
+                if len(short_path) > 60:
+                    short_path = "..." + short_path[-57:]
+                t.add_row(Text(f"  File: [bright_black]{short_path}[/bright_black]"))
+
+            mod_progress = f"Mod {live_stats['mods_done']}/{live_stats['mods_total']}"
+            entry_progress = f"Entries {live_stats['entries_done']}/{live_stats['entries_total']}"
+            if live_stats["entries_total"] > 0:
+                pct = live_stats["entries_done"] / live_stats["entries_total"] * 100
+                bar_width = 30
+                filled = int(bar_width * live_stats["entries_done"] / live_stats["entries_total"])
+                bar = "█" * filled + "░" * (bar_width - filled)
+                t.add_row(Text(f"  {entry_progress} [{bar}] {pct:.0f}%", style="bright_black"))
+            if live_stats["mods_total"] > 0:
+                t.add_row(Text(f"  {mod_progress}", style="bright_black"))
+
+            return t
+
+        live = Live(_build_progress_renderable(), console=console, refresh_per_second=4, transient=False)
+
+        with live:
+            reporter.report_title("Starting translation...")
 
             try:
                 handle_translate_command(args)
@@ -371,94 +515,89 @@ def run_translation(params: dict[str, Any]) -> None:
         success_message = "[bold]Translation completed successfully![/bold]\n"
         success_message += f"Translated mods can be found at: [white]{params['output']}[/white]"
 
-        console.print(Panel(
-            success_message,
-            title="Success",
-            border_style="red",
-            title_align="center",
-            box=box.DOUBLE
-        ))
+        console.print(Panel(success_message, title="Success", border_style="red", title_align="center", box=box.DOUBLE))
 
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception as e:
-        console.print(Panel(
-            f"[bold]{str(e)}[/bold]",
-            title="Error",
-            border_style="red",
-            title_align="center",
-            box=box.DOUBLE
-        ))
+        console.print(
+            Panel(f"[bold]{str(e)}[/bold]", title="Error", border_style="red", title_align="center", box=box.DOUBLE)
+        )
         console.print_exception()
 
-
-def _handle_progress_event(event: str, progress: Progress, task, **kwargs) -> None:
-    if event == "title":
-        progress.update(task, description=f"[bold red]{kwargs['text']}")
-    elif event == "progress":
-        progress.update(task, total=kwargs["total"], completed=kwargs["current"])
 
 def main(debug: bool = False) -> None:
     """Main entry point for the console app."""
     try:
         display_title()
 
-        # Check if deep-translator is installed
         try:
-            from deep_translator import GoogleTranslator
+            from deep_translator import GoogleTranslator  # noqa: F401
         except ImportError:
-            console.print(Panel(
-                "[bold]deep_translator package is required for translation.[/bold]\n"
-                "Please install it with: [cyan]pip install deep_translator[/cyan]",
-                title="Missing Dependency",
-                border_style="red",
-                title_align="center",
-                box=box.DOUBLE
-            ))
+            console.print(
+                Panel(
+                    "[bold]deep_translator package is required for translation.[/bold]\n"
+                    "Please install it with: [cyan]pip install deep_translator[/cyan]",
+                    title="Missing Dependency",
+                    border_style="red",
+                    title_align="center",
+                    box=box.DOUBLE,
+                )
+            )
             console.print()
             input("Press Enter to exit...")
             return
 
-        params = get_user_input()
+        params = get_user_input(load_config(config_path) if (config_path := find_config_file("./mods")) else None)
 
         if params.get("provider") != "google":
             from ..core.provider_check import check_provider_available
+
             available, status = check_provider_available(params["provider"])
             if not available:
-                console.print(Panel(
-                    f"[bold]{params['provider'].capitalize()} not available: {status}[/bold]",
-                    title="Provider Setup Required",
-                    border_style="red",
-                    title_align="center",
-                    box=box.DOUBLE
-                ))
+                console.print(
+                    Panel(
+                        f"[bold]{params['provider'].capitalize()} not available: {status}[/bold]",
+                        title="Provider Setup Required",
+                        border_style="red",
+                        title_align="center",
+                        box=box.DOUBLE,
+                    )
+                )
                 console.print()
                 input("Press Enter to exit...")
                 return
 
-        params["debug"] = debug
-        run_translation(params)
+        console.print("[bold]Scanning mods...[/bold]")
+        scanner = ModScanner(params["path"])
+        mods = scanner.discover_mods()
 
-        # Add pause before closing (especially useful for compiled executable)
+        selected_mods = select_mods(mods)
+
+        if not selected_mods:
+            console.print("[bold yellow]No mods selected. Exiting.[/bold yellow]")
+            console.print()
+            input("Press Enter to exit...")
+            return
+
+        params["debug"] = debug
+        params["selected_mods"] = selected_mods
+        run_translation(params, selected_mods)
+
         console.print()
         input("Press Enter to exit...")
 
     except KeyboardInterrupt:
-        # Silently exit on Ctrl+C without showing any error message
         sys.exit(0)
     except Exception as e:
-        console.print(Panel(
-            f"[bold]{str(e)}[/bold]",
-            title="Error",
-            border_style="red",
-            title_align="center",
-            box=box.DOUBLE
-        ))
+        console.print(
+            Panel(f"[bold]{str(e)}[/bold]", title="Error", border_style="red", title_align="center", box=box.DOUBLE)
+        )
         console.print_exception()
 
-        # Add pause before closing even on error
         console.print()
         input("Press Enter to exit...")
+
 
 if __name__ == "__main__":
     main()
