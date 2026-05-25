@@ -7,6 +7,7 @@ import logging
 import os
 import zipfile
 
+from ..core.config_loader import find_config_file, load_config
 from ..core.file_manager import FileManager
 from ..core.settings import Settings
 from ..logging_config import setup_logging
@@ -36,6 +37,12 @@ def add_translate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--workers", type=int, default=4, help="Number of concurrent translation workers (default: 4)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be translated without making changes")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging to console")
+    parser.add_argument(
+        "-c", "--config",
+        type=str,
+        default=None,
+        help="Path to translator.toml config file (auto-discovered if not specified)",
+    )
 
 
 def _check_dependencies(provider: str) -> bool:
@@ -133,7 +140,11 @@ def handle_translate_command(args: argparse.Namespace) -> None:
         setup_logging(console_level=logging.DEBUG if debug else logging.INFO)
 
         args.provider = provider
-        settings = Settings(cli_args=args)
+        config_data = None
+        config_path = find_config_file(getattr(args, "path", "./"), getattr(args, "config", None))
+        if config_path:
+            config_data = load_config(config_path)
+        settings = Settings(cli_args=args, config_data=config_data)
         file_manager = FileManager(settings)
 
         file_manager.create_needed_folders()
@@ -182,5 +193,12 @@ def handle_translate_command(args: argparse.Namespace) -> None:
 
         file_manager.remove_folder(settings.temp_path)
         logger.info("All mods have been translated!")
+    except KeyboardInterrupt:
+        logger.info("Translation interrupted by user. Cleaning up...")
+        try:
+            if "settings" in locals() and os.path.exists(settings.temp_path):
+                file_manager.remove_folder(settings.temp_path)
+        except Exception:
+            pass
     except Exception as e:
         logger.exception("Error translating mods: %s", e)

@@ -68,6 +68,47 @@ class TestSettings:
         args = parser.parse_args(["-p", "./mods", "-s", "en_US", "-t", "uk_UA", "--ai"])
         assert args.ai is True
 
+    def test_config_data_overrides_defaults(self):
+        config = {"source": "uk_UA", "target": "de_DE", "provider": "openai", "workers": 10, "output": "./my_out"}
+        settings = Settings(config_data=config)
+        assert settings.source_mc_lang == "uk_UA"
+        assert settings.target_mc_lang == "de_DE"
+        assert settings.provider == "openai"
+        assert settings.max_workers == 10
+        assert settings.translation_path == "./my_out"
+
+    def test_cli_overrides_config_data(self):
+        config = {"source": "uk_UA", "provider": "openai", "workers": 10}
+        args = argparse.Namespace(source="fr_FR", provider="google", workers=5)
+        settings = Settings(cli_args=args, config_data=config)
+        assert settings.source_mc_lang == "fr_FR"
+        assert settings.provider == "google"
+        assert settings.max_workers == 5
+
+    def test_config_data_partial(self):
+        config = {"source": "uk_UA"}
+        settings = Settings(config_data=config)
+        assert settings.source_mc_lang == "uk_UA"
+        assert settings.target_mc_lang == "es_ES"  # default
+        assert settings.provider == "google"  # default
+        assert settings.max_workers == 4  # default
+
+    def test_config_with_no_cli_args(self):
+        config = {"source": "de_DE", "provider": "anthropic"}
+        settings = Settings(config_data=config)
+        assert settings.source_mc_lang == "de_DE"
+        assert settings.provider == "anthropic"
+
+    def test_config_empty_dict_no_change(self):
+        settings = Settings(config_data={})
+        assert settings.source_mc_lang == "en_US"
+        assert settings.provider == "google"
+
+    def test_config_none_no_change(self):
+        settings = Settings(config_data=None)
+        assert settings.source_mc_lang == "en_US"
+        assert settings.provider == "google"
+
 
 class TestJsonParsing:
     def test_remove_comments_single_line(self):

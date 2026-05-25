@@ -31,6 +31,15 @@ def build_argument_parser() -> ArgumentParser:
     app_parser = subparsers.add_parser("app", help="Launch interactive form interface")
     app_parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging to console")
 
+    # Create the init command
+    init_parser = subparsers.add_parser("init", help="Generate a translator.toml config template")
+    init_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to create translator.toml in (default: current directory)",
+    )
+
     # For backward compatibility, also add translate arguments to the main parser
     add_translate_arguments(parser)
 
@@ -49,6 +58,12 @@ def main() -> None:
 
         args = parser.parse_args()
 
+        if getattr(args, "command", None) == "init":
+            from ..core.config_loader import generate_config_template
+            path = generate_config_template(args.directory)
+            print(f"Config template created at: {path}")
+            return
+
         # Handle different commands
         if getattr(args, "command", None) == "app":
             # Import app module here to avoid circular imports
@@ -58,6 +73,8 @@ def main() -> None:
         else:
             # Default to translate command for backward compatibility
             handle_translate_command(args)
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
     except Exception as e:
         logger.exception("Error: %s", e)
 

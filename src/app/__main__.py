@@ -16,6 +16,8 @@ def _main() -> None:
 if __name__ == "__main__":
     try:
         _main()
+    except KeyboardInterrupt:
+        sys.exit(0)
     except Exception as e:
         print(f"Error in Mod Translator: {e}")
         traceback.print_exc()

@@ -125,7 +125,8 @@ class BaseTranslatorService(ABC):
         chunk_size = self._CHUNK_SIZE
         chunks = [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
-        with ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(chunks)))) as executor:
+        executor = ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(chunks))))
+        try:
             future_map = {executor.submit(self._translate_chunk, chunk): idx for idx, chunk in enumerate(chunks)}
 
             for future in as_completed(future_map):
@@ -134,6 +135,11 @@ class BaseTranslatorService(ABC):
                     translated_data.update(chunk_result)
                 except Exception as e:
                     logger.warning("Error translating chunk: %s", e)
+        except KeyboardInterrupt:
+            logger.info("Translation interrupted by user — cancelling remaining tasks...")
+            raise
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         logger.info("Successfully translated %d entries", len(data))
         return translated_data
@@ -182,7 +188,8 @@ class BaseTranslatorService(ABC):
         empty_items = {k: v for k, v in data.items() if not v or not isinstance(v, str)}
         translated_data.update(empty_items)
 
-        with ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(items)))) as executor:
+        executor = ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(items))))
+        try:
             future_map = {executor.submit(self.translate, text): key for key, text in items}
             completed = len(empty_items)
 
@@ -196,6 +203,11 @@ class BaseTranslatorService(ABC):
                 except Exception as e:
                     logger.warning("Error translating entry: %s", e)
                     translated_data[key] = data[key]
+        except KeyboardInterrupt:
+            logger.info("Translation interrupted by user — cancelling remaining tasks...")
+            raise
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         logger.info("Successfully translated %d entries", len(data))
         return translated_data
