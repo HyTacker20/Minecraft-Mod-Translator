@@ -5,6 +5,7 @@ This module provides a user-friendly form-based terminal interface.
 
 import os
 import sys
+import logging
 from typing import Dict, Any
 from pathlib import Path
 
@@ -19,14 +20,13 @@ from rich.table import Table
 from rich import box
 from pyfiglet import Figlet
 
+from ..core.settings import Settings
 from ..commands.translate import (
-    Settings, 
     handle_translate_command,
-    log_title, 
-    log_subtitle, 
-    log_message, 
-    DISABLE_LOGS
 )
+
+from ..utils.progress import ProgressReporter
+from ..logging_config import setup_logging
 
 # Setup console and theme
 UI_THEME = Theme({
@@ -227,25 +227,9 @@ def get_user_input() -> Dict[str, Any]:
             sys.exit(0)
         
         # Check if OpenAI is available for translation method selection
-        openai_available = False
-        openai_status_message = ""
-        
-        try:
-            import openai
-            try:
-                from dotenv import load_dotenv
-                load_dotenv()
-            except ImportError:
-                pass
-            
-            api_key = os.getenv("OPENAI_API_KEY")
-            if api_key:
-                openai_available = True
-                openai_status_message = "✅ Available (API key configured)"
-            else:
-                openai_status_message = "❌ API key not found (.env file or environment variable)"
-        except ImportError:
-            openai_status_message = "❌ Package not installed (pip install openai python-dotenv)"
+        from ..core.openai_check import check_openai_available
+        openai_available, openai_status_message = check_openai_available()
+        openai_status_message = f"✅ {openai_status_message}" if openai_available else f"❌ {openai_status_message}"
         
         # Get translation method
         translation_choices = [
@@ -360,57 +344,34 @@ def get_user_input() -> Dict[str, Any]:
         sys.exit(0)
 
 def run_translation(params: Dict[str, Any]) -> None:
-    """Run the translation process with the given parameters."""
     try:
-        # Override the default logging functions to use rich
-        global DISABLE_LOGS
-        DISABLE_LOGS = True  # Disable built-in logging
-        
+        logger = setup_logging(console_level=logging.INFO)
+
         class Args:
-            """Simple class to mimic argparse.Namespace."""
             def __init__(self, **kwargs):
                 for key, value in kwargs.items():
                     setattr(self, key, value)
-        
+
         args = Args(**params)
-        
-        # Create progress display
+
         with Progress(
             SpinnerColumn(style="red"),
             TextColumn("[bold red]{task.description}"),
             console=console
         ) as progress:
             task = progress.add_task("[red]Unpacking mod files...", total=None)
-            
-            # Define custom logging functions to update progress
-            def custom_log_title(message):
-                progress.update(task, description=f"[bold red]{message}")
-            
-            def custom_log_subtitle(message):
-                # Display subtitles in the console using simple print
-                print(f"  ↳ {message}")
-            
-            def custom_log_message(message):
-                # Display log messages using simple print
-                print(f"    • {message}")
-            
-            # Monkey-patch the logging functions
-            from ..commands import translate
-            translate.log_title = custom_log_title
-            translate.log_subtitle = custom_log_subtitle
-            translate.log_message = custom_log_message
-            
+
+            reporter = ProgressReporter()
+            reporter.subscribe(lambda event, **kw: _handle_progress_event(event, progress, task, **kw))
+
             try:
-                # Run the translation process
                 handle_translate_command(args)
             except KeyboardInterrupt:
-                # Silently exit on Ctrl+C without showing any error message
                 sys.exit(0)
-                
-        # Show completion message with panel
+
         success_message = "[bold]Translation completed successfully![/bold]\n"
         success_message += f"Translated mods can be found at: [white]{params['output']}[/white]"
-        
+
         console.print(Panel(
             success_message,
             title="Success",
@@ -418,9 +379,8 @@ def run_translation(params: Dict[str, Any]) -> None:
             title_align="center",
             box=box.DOUBLE
         ))
-        
+
     except KeyboardInterrupt:
-        # Silently exit on Ctrl+C without showing any error message
         sys.exit(0)
     except Exception as e:
         console.print(Panel(
@@ -431,6 +391,13 @@ def run_translation(params: Dict[str, Any]) -> None:
             box=box.DOUBLE
         ))
         console.print_exception()
+
+
+def _handle_progress_event(event: str, progress: Progress, task, **kwargs) -> None:
+    if event == "title":
+        progress.update(task, description=f"[bold red]{kwargs['text']}")
+    elif event == "progress":
+        progress.update(task, total=kwargs["total"], completed=kwargs["current"])
 
 def main() -> None:
     """Main entry point for the console app."""
@@ -457,35 +424,11 @@ def main() -> None:
         
         # Additional check for OpenAI if AI translation was selected
         if params.get("ai", False):
-            try:
-                import openai
-                try:
-                    from dotenv import load_dotenv
-                    load_dotenv()
-                except ImportError:
-                    pass
-                
-                api_key = os.getenv("OPENAI_API_KEY")
-                if not api_key:
-                    console.print(Panel(
-                        "[bold]OpenAI API key not found![/bold]\n"
-                        "To use OpenAI translation:\n"
-                        "1. Get an API key from: [cyan]https://platform.openai.com/api-keys[/cyan]\n"
-                        "2. Create a [cyan].env[/cyan] file with: [cyan]OPENAI_API_KEY=your_key_here[/cyan]\n"
-                        "3. Or set the environment variable: [cyan]OPENAI_API_KEY=your_key[/cyan]",
-                        title="OpenAI Setup Required",
-                        border_style="red",
-                        title_align="center",
-                        box=box.DOUBLE
-                    ))
-                    console.print()
-                    input("Press Enter to exit...")
-                    return
-            except ImportError:
+            available, status = check_openai_available()
+            if not available:
                 console.print(Panel(
-                    "[bold]OpenAI package not found![/bold]\n"
-                    "Please install it with: [cyan]pip install openai python-dotenv[/cyan]",
-                    title="Missing OpenAI Dependencies",
+                    f"[bold]OpenAI not available: {status}[/bold]",
+                    title="OpenAI Setup Required",
                     border_style="red",
                     title_align="center",
                     box=box.DOUBLE

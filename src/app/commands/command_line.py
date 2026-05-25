@@ -3,29 +3,18 @@ Main command-line interface for Mod Translator.
 """
 
 import sys
-import json
-from argparse import ArgumentParser, Namespace, _SubParsersAction
+import logging
+from argparse import ArgumentParser
 
 from ..commands.translate import add_translate_arguments, handle_translate_command
 
-def print_json(data: dict) -> None:
-    """
-    Print data as JSON.
-    
-    Args:
-        data: Data to print
-    """
-    formatted = json.dumps(data, indent=2)
-    if sys.stdout.isatty():
-        print(formatted)
-    else:
-        sys.stdout.write(formatted)
+logger = logging.getLogger("mod_translator")
 
 
 def build_argument_parser() -> ArgumentParser:
     """
     Build the argument parser for the command-line interface.
-    
+
     Returns:
         ArgumentParser object
     """
@@ -69,9 +58,7 @@ def main() -> None:
             # Default to translate command for backward compatibility
             handle_translate_command(args)
     except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error: %s", e)
 
 
 if __name__ == "__main__":
