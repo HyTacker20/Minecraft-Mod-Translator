@@ -1,8 +1,9 @@
+import json
 import logging
 import os
 
 from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
-from .base_translator import BaseTranslatorService, make_system_prompt
+from .base_translator import BaseTranslatorService, make_chunk_system_prompt, make_system_prompt
 
 logger = logging.getLogger("mod_translator")
 
@@ -17,6 +18,8 @@ PROVIDER_DEFAULTS: dict[str, str] = {
 
 
 class LitellmService(BaseTranslatorService):
+    _CHUNK_SIZE = 25
+
     def __init__(
         self,
         source_lang: str,
@@ -43,6 +46,50 @@ class LitellmService(BaseTranslatorService):
         resolved = model or os.getenv("TRANSLATION_MODEL") or PROVIDER_DEFAULTS.get(provider, DEFAULT_TRANSLATION_MODEL)
         self._model = resolved
         logger.info("LiteLLM initialized with model: %s", self._model)
+
+    def _translate_chunk(self, chunk: list[tuple[str, str]]) -> dict[str, str]:
+        if not chunk:
+            return {}
+
+        if len(chunk) == 1:
+            key, text = chunk[0]
+            try:
+                return {key: self.translate(text)}
+            except Exception:
+                return {key: text}
+
+        items = {key: text for key, text in chunk}
+
+        @self._retry
+        def _do_translate(payload: str) -> str:
+            global_rate_limiter.apply_service_delay("litellm")
+
+            system_prompt = make_chunk_system_prompt(self.source_lang, self.target_lang)
+
+            response = self._completion(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": payload},
+                ],
+                temperature=0.3,
+                max_tokens=2000,
+            )
+
+            return response.choices[0].message.content
+
+        try:
+            response = _do_translate(json.dumps(items, ensure_ascii=False))
+            result = self._parse_chunk_response(response, chunk)
+
+            for key in items:
+                if key not in result:
+                    result[key] = items[key]
+
+            return result
+        except Exception as e:
+            logger.warning("LiteLLM chunk translation failed: %s", e)
+            return {key: text for key, text in chunk}
 
     def translate(self, text: str) -> str:
         if not text.strip():

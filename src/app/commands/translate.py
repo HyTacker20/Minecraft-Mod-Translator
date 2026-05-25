@@ -46,12 +46,6 @@ def _check_dependencies(provider: str) -> bool:
         return True
 
     try:
-        import litellm  # noqa: F401
-    except ImportError:
-        logger.error("LiteLLM package is required for AI providers. Install with: pip install litellm")
-        return False
-
-    try:
         from dotenv import load_dotenv
         load_dotenv()
         logger.info("Loaded .env file")
@@ -59,12 +53,29 @@ def _check_dependencies(provider: str) -> bool:
         logger.info("python-dotenv not found, using system environment variables")
 
     if provider == "openai":
+        try:
+            import openai  # noqa: F401
+        except ImportError:
+            try:
+                import litellm  # noqa: F401
+            except ImportError:
+                logger.error(
+                    "OpenAI or LiteLLM package is required for OpenAI provider. "
+                    "Install with: pip install openai litellm"
+                )
+                return False
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             logger.error("OPENAI_API_KEY environment variable not set.")
             return False
         logger.info("OpenAI API key configured")
         return True
+
+    try:
+        import litellm  # noqa: F401
+    except ImportError:
+        logger.error("LiteLLM package is required for AI providers. Install with: pip install litellm")
+        return False
 
     if provider == "anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY")
