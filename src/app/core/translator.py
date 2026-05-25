@@ -1,7 +1,7 @@
 import logging
 
-from ..utils.retry_logic import create_retry_decorator, global_rate_limiter
 from ..services import google_translate, openai_translate
+from ..utils.retry_logic import create_retry_decorator
 
 logger = logging.getLogger("mod_translator")
 

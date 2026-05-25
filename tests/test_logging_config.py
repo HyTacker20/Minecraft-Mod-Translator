@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from app.logging_config import setup_logging, get_logger
+from app.logging_config import get_logger, setup_logging
 
 
 class TestLoggingConfig:

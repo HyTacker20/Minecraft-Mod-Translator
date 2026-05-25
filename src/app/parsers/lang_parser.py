@@ -4,7 +4,7 @@ from ..exceptions import FileParsingError
 def read_lang_file(path: str) -> dict[str, str]:
     data = {}
     try:
-        with open(path, "r", encoding="utf-8") as file:
+        with open(path, encoding="utf-8") as file:
             lines = file.readlines()
     except OSError as e:
         raise FileParsingError(f"Cannot read {path}: {e}") from e

@@ -2,8 +2,8 @@
 Main command-line interface for Mod Translator.
 """
 
-import sys
 import logging
+import sys
 from argparse import ArgumentParser
 
 from ..commands.translate import add_translate_arguments, handle_translate_command
@@ -19,21 +19,21 @@ def build_argument_parser() -> ArgumentParser:
         ArgumentParser object
     """
     parser = ArgumentParser(prog="mod-translator")
-    
+
     # Create subparsers for different commands
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
-    
+
     # Create the CLI command (default)
     cli_parser = subparsers.add_parser("cli", help="Use traditional command-line arguments")
     add_translate_arguments(cli_parser)
-    
+
     # Create the app command
     app_parser = subparsers.add_parser("app", help="Launch interactive form interface")
     # No arguments needed for the app interface
-    
+
     # For backward compatibility, also add translate arguments to the main parser
     add_translate_arguments(parser)
-    
+
     return parser
 
 
@@ -41,14 +41,14 @@ def main() -> None:
     """Main entry point for the command-line interface."""
     try:
         parser = build_argument_parser()
-        
+
         # If no arguments provided, show help
         if len(sys.argv) == 1:
             parser.print_help()
             return
-            
+
         args = parser.parse_args()
-        
+
         # Handle different commands
         if getattr(args, "command", None) == "app":
             # Import app module here to avoid circular imports

@@ -1,7 +1,7 @@
-import time
 import logging
+import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable
 
 from ..utils.retry_logic import global_rate_limiter
 

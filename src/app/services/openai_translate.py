@@ -1,7 +1,7 @@
+import logging
 import os
 import time
-import logging
-from typing import Callable
+from collections.abc import Callable
 
 from ..utils.retry_logic import global_rate_limiter
 

@@ -1,5 +1,5 @@
-import os
 import builtins
+import os
 from unittest.mock import patch
 
 from app.core.openai_check import check_openai_available

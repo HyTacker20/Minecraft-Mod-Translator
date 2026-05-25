@@ -1,5 +1,3 @@
-import argparse
-from unittest.mock import patch
 
 from app.commands.command_line import build_argument_parser
 

@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 
 logger = logging.getLogger("mod_translator")
 

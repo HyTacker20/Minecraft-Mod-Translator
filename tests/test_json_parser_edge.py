@@ -1,9 +1,9 @@
-import json
-import pytest
 from pathlib import Path
 
-from app.parsers.json_parser import parse_json_with_comments
+import pytest
+
 from app.exceptions import FileParsingError
+from app.parsers.json_parser import parse_json_with_comments
 
 
 class TestJsonParserEdge:

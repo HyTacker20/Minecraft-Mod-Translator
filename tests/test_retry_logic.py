@@ -1,6 +1,11 @@
 import time
 
-from app.utils.retry_logic import RateLimitTracker, retry_with_exponential_backoff, TranslationRateLimiter, create_retry_decorator
+from app.utils.retry_logic import (
+    RateLimitTracker,
+    TranslationRateLimiter,
+    create_retry_decorator,
+    retry_with_exponential_backoff,
+)
 
 
 class TestRateLimitTracker:

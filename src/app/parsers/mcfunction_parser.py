@@ -1,5 +1,4 @@
 import re
-import os
 
 from ..exceptions import FileParsingError
 
@@ -7,7 +6,7 @@ from ..exceptions import FileParsingError
 def read_mcfunction_file(path: str) -> dict[str, str]:
     data = {}
     try:
-        with open(path, "r", encoding="utf-8") as file:
+        with open(path, encoding="utf-8") as file:
             lines = file.readlines()
 
         for line_num, line in enumerate(lines, 1):
@@ -26,7 +25,7 @@ def read_mcfunction_file(path: str) -> dict[str, str]:
 
 def write_mcfunction_file(original_path: str, translated_data: dict[str, str]) -> None:
     try:
-        with open(original_path, "r", encoding="utf-8") as file:
+        with open(original_path, encoding="utf-8") as file:
             lines = file.readlines()
 
         for line_num, line in enumerate(lines):

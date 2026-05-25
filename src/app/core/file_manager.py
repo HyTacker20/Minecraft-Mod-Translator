@@ -1,13 +1,13 @@
-import os
 import json
-import shutil
 import logging
+import os
+import shutil
 import zipfile
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZIP_DEFLATED, ZipFile
 
+from ..parsers import json_parser, lang_parser, mcfunction_parser
 from .settings import Settings
 from .translator import Translator
-from ..parsers import json_parser, lang_parser, mcfunction_parser
 
 logger = logging.getLogger("mod_translator")
 
@@ -237,7 +237,7 @@ class FileManager:
             if os.path.exists(path):
                 file_size = os.path.getsize(path)
                 logger.info("JSON file successfully written (%d bytes)", file_size)
-                with open(path, "r", encoding="utf-8") as check_file:
+                with open(path, encoding="utf-8") as check_file:
                     content = check_file.read()
                     if len(content) > 0:
                         logger.info("Verified file content: %d bytes", len(content))

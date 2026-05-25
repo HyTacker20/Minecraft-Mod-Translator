@@ -1,13 +1,12 @@
-import os
 import argparse
 import builtins
-import zipfile
+import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from app.commands.translate import (
-    add_translate_arguments,
     _check_dependencies,
+    add_translate_arguments,
     handle_translate_command,
 )
 

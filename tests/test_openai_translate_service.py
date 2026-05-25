@@ -1,11 +1,11 @@
-import os
 import builtins
-from unittest.mock import MagicMock, patch, PropertyMock
+import os
+from unittest.mock import MagicMock, patch
 
 from app.services.openai_translate import (
-    setup_openai_client,
-    openai_translate,
     batch_translate_openai,
+    openai_translate,
+    setup_openai_client,
 )
 
 

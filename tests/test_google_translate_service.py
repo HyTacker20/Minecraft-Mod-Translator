@@ -1,6 +1,5 @@
-from unittest.mock import MagicMock, patch
 
-from app.services.google_translate import batch_translate_google, _batch_translate_sequential, _batch_translate_concurrent
+from app.services.google_translate import batch_translate_google
 
 
 def _mock_translate_fn(text: str) -> str:

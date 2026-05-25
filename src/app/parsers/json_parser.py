@@ -13,7 +13,7 @@ def remove_comments_from_json(json_str: str) -> str:
 
 def parse_json_with_comments(file_path: str) -> dict[str, Any]:
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
         clean_content = remove_comments_from_json(content)
         return json.loads(clean_content)

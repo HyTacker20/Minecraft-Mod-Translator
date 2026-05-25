@@ -1,6 +1,5 @@
 import sys
-import argparse
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 from app.commands.command_line import build_argument_parser, main
 

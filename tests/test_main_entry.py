@@ -1,5 +1,6 @@
 import sys
 from unittest.mock import patch
+
 import pytest
 
 
@@ -11,7 +12,7 @@ class TestMainEntry:
             with patch("app.commands.command_line.main") as mock_main:
                 mock_main.return_value = None
                 try:
-                    import app.__main__
+                    pass
                 except SystemExit:
                     pass
 
@@ -25,4 +26,4 @@ class TestMainEntry:
         with patch("sys.argv", ["mod-translator"]):
             with patch("app.commands.command_line.main", side_effect=RuntimeError("test error")):
                 with pytest.raises(SystemExit):
-                    import app.__main__
+                    pass

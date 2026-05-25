@@ -1,11 +1,10 @@
-import os
 import json
-import zipfile
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.core.settings import Settings
 from app.core.file_manager import FileManager
+from app.core.settings import Settings
 
 
 class TestFileManagerExtended:

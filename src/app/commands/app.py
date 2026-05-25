@@ -3,30 +3,27 @@ Console application interface for Mod Translator.
 This module provides a user-friendly form-based terminal interface.
 """
 
+import logging
 import os
 import sys
-import logging
-from typing import Dict, Any
-from pathlib import Path
+from typing import Any
 
 import questionary
+from pyfiglet import Figlet
+from rich import box
+from rich.align import Align
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.theme import Theme
-from rich.text import Text
-from rich.align import Align
 from rich.table import Table
-from rich import box
-from pyfiglet import Figlet
+from rich.text import Text
+from rich.theme import Theme
 
-from ..core.settings import Settings
 from ..commands.translate import (
     handle_translate_command,
 )
-
-from ..utils.progress import ProgressReporter
 from ..logging_config import setup_logging
+from ..utils.progress import ProgressReporter
 
 # Setup console and theme
 UI_THEME = Theme({
@@ -56,7 +53,7 @@ def display_title() -> None:
     """Display the application title using figlet."""
     # Clear the console before showing the title
     os.system('cls' if os.name == 'nt' else 'clear')
-    
+
     # Set the console window title
     if os.name == 'nt':
         os.system('title Minecraft Mod Translator')
@@ -69,7 +66,7 @@ def display_title() -> None:
     console.print(Align.center(Text("Translate your Minecraft mods from one language to another", style="italic")))
     console.print()
 
-def get_user_input() -> Dict[str, Any]:
+def get_user_input() -> dict[str, Any]:
     """Collect user input through a form interface."""
     try:
         # Prepare common language options
@@ -165,35 +162,35 @@ def get_user_input() -> Dict[str, Any]:
             {'name': 'Vietnamese (vi_VN)', 'value': 'vi_VN'},
             {'name': 'Welsh (cy_GB)', 'value': 'cy_GB'}
         ]
-        
+
         # Create a lookup dictionary for language names
         language_names = {option["value"]: option["name"] for option in language_options}
-        
+
         # Get the mods path
         mods_path = questionary.text(
             "Path to mods folder:",
             default=os.path.join(os.getcwd(), "mods"),
             style=QUESTIONARY_STYLE
         ).ask()
-        
+
         if mods_path is None:  # This occurs when user presses Ctrl+C
             sys.exit(0)
-            
+
         if not mods_path:
             console.print("[bold red]Path is required. Exiting.[/bold red]")
             sys.exit(1)
-        
+
         # Make sure path exists
         if not os.path.exists(mods_path):
             console.print(f"[bold red]Path '{mods_path}' does not exist. Exiting.[/bold red]")
             sys.exit(1)
-        
+
         # Normalize path
         mods_path = os.path.abspath(mods_path)
           # Get source language - using English (en_US) as default
         # Find the en_US option to use as default
         default_source = next((option for option in language_options if option["value"] == "en_US"), language_options[0])
-        
+
         source_lang = questionary.select(
             "Source language:",
             choices=language_options,
@@ -203,39 +200,39 @@ def get_user_input() -> Dict[str, Any]:
             use_jk_keys=False,
             use_search_filter=True
         ).ask()
-        
+
         if source_lang is None:  # This occurs when user presses Ctrl+C
             sys.exit(0)
-        
+
         # Get target language - filter out the source language
         target_language_options = [option for option in language_options if option["value"] != source_lang]
-        
+
         # Find the first available option as default
         default_target = target_language_options[0]
-        
+
         target_lang = questionary.select(
             "Target language:",
             choices=target_language_options,
             default=default_target,
             instruction="(Use ↑↓ and Enter, or type to search)",
             style=QUESTIONARY_STYLE,
-            use_jk_keys=False, 
+            use_jk_keys=False,
             use_search_filter=True
         ).ask()
-        
+
         if target_lang is None:  # This occurs when user presses Ctrl+C
             sys.exit(0)
-        
+
         # Check if OpenAI is available for translation method selection
         from ..core.openai_check import check_openai_available
         openai_available, openai_status_message = check_openai_available()
         openai_status_message = f"✅ {openai_status_message}" if openai_available else f"❌ {openai_status_message}"
-        
+
         # Get translation method
         translation_choices = [
-            {"name": f"🌐 Google Translate (Free) - Always available", "value": "google"},
+            {"name": "🌐 Google Translate (Free) - Always available", "value": "google"},
         ]
-        
+
         if openai_available:
             translation_choices.append(
                 {"name": f"🤖 OpenAI Translation (Premium) - {openai_status_message}", "value": "openai"}
@@ -244,7 +241,7 @@ def get_user_input() -> Dict[str, Any]:
             translation_choices.append(
                 {"name": f"🤖 OpenAI Translation (Premium) - {openai_status_message}", "value": "openai_unavailable"}
             )
-        
+
         translation_method = questionary.select(
             "Choose translation method:",
             choices=translation_choices,
@@ -253,10 +250,10 @@ def get_user_input() -> Dict[str, Any]:
             style=QUESTIONARY_STYLE,
             use_jk_keys=False
         ).ask()
-        
+
         if translation_method is None:  # This occurs when user presses Ctrl+C
             sys.exit(0)
-        
+
         # Handle OpenAI unavailable selection
         if translation_method == "openai_unavailable":
             console.print("\n[bold yellow]OpenAI Translation Setup Required[/bold yellow]")
@@ -266,9 +263,9 @@ def get_user_input() -> Dict[str, Any]:
             console.print("3. Create a [cyan].env[/cyan] file with: [cyan]OPENAI_API_KEY=your_key_here[/cyan]")
             console.print("\nFalling back to Google Translate...\n")
             translation_method = "google"
-        
+
         use_ai = translation_method == "openai"
-        
+
         # Get output path
         output_choice = questionary.select(
             "Where to save translated mods?",
@@ -281,10 +278,10 @@ def get_user_input() -> Dict[str, Any]:
             use_jk_keys=False,
             use_search_filter=True
         ).ask()
-        
+
         if output_choice is None:  # This occurs when user presses Ctrl+C
             sys.exit(0)
-        
+
         output_path = mods_path
         if output_choice == "new_folder":
             # Get the output path for translated mods
@@ -294,44 +291,44 @@ def get_user_input() -> Dict[str, Any]:
                 default=default_output,
                 style=QUESTIONARY_STYLE
             ).ask()
-            
+
             if output_path is None:  # This occurs when user presses Ctrl+C
                 sys.exit(0)
-            
+
             # Create output directory if it doesn't exist
             os.makedirs(output_path, exist_ok=True)
-        
+
         # Clear the console before showing confirmation
         os.system('cls' if os.name == 'nt' else 'clear')
-        
+
         # Confirm user choices with rich formatting
         console.print("\n[bold]Please confirm your choices:[/bold]")
-        
+
         confirmation_table = Table(show_header=False, box=box.SIMPLE)
         confirmation_table.add_column("Parameter", style="secondary")
         confirmation_table.add_column("Value", style="primary")
-        
+
         confirmation_table.add_row("Mods path", mods_path)
         confirmation_table.add_row("Source language", language_names.get(source_lang, source_lang))
         confirmation_table.add_row("Target language", language_names.get(target_lang, target_lang))
         confirmation_table.add_row("Translation method", "🤖 OpenAI (Premium)" if use_ai else "🌐 Google Translate (Free)")
         confirmation_table.add_row("Output path", output_path)
-        
+
         console.print(confirmation_table)
         console.print()
-        
+
         confirmed = questionary.confirm(
-            "Continue with these settings?", 
+            "Continue with these settings?",
             default=True,
             style=QUESTIONARY_STYLE,
         ).ask()
-        
+
         if confirmed is None or not confirmed:  # This occurs when user presses Ctrl+C or selects No
             sys.exit(0)
-        
+
         # Clear the console after confirmation
         os.system('cls' if os.name == 'nt' else 'clear')
-        
+
         return {
             "path": mods_path,
             "source": source_lang,
@@ -343,7 +340,7 @@ def get_user_input() -> Dict[str, Any]:
         # Silently exit on Ctrl+C without showing any error message
         sys.exit(0)
 
-def run_translation(params: Dict[str, Any]) -> None:
+def run_translation(params: dict[str, Any]) -> None:
     try:
         logger = setup_logging(console_level=logging.INFO)
 
@@ -403,7 +400,7 @@ def main() -> None:
     """Main entry point for the console app."""
     try:
         display_title()
-        
+
         # Check if deep-translator is installed
         try:
             from deep_translator import GoogleTranslator
@@ -419,9 +416,9 @@ def main() -> None:
             console.print()
             input("Press Enter to exit...")
             return
-        
+
         params = get_user_input()
-        
+
         # Additional check for OpenAI if AI translation was selected
         if params.get("ai", False):
             available, status = check_openai_available()
@@ -436,13 +433,13 @@ def main() -> None:
                 console.print()
                 input("Press Enter to exit...")
                 return
-        
+
         run_translation(params)
-        
+
         # Add pause before closing (especially useful for compiled executable)
         console.print()
         input("Press Enter to exit...")
-        
+
     except KeyboardInterrupt:
         # Silently exit on Ctrl+C without showing any error message
         sys.exit(0)
@@ -455,7 +452,7 @@ def main() -> None:
             box=box.DOUBLE
         ))
         console.print_exception()
-        
+
         # Add pause before closing even on error
         console.print()
         input("Press Enter to exit...")

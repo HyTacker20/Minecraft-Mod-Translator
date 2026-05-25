@@ -1,10 +1,9 @@
-import os
-import stat
-import pytest
 from pathlib import Path
 
-from app.parsers.lang_parser import read_lang_file, write_lang_file
+import pytest
+
 from app.exceptions import FileParsingError
+from app.parsers.lang_parser import read_lang_file
 
 
 class TestLangParserEdge:

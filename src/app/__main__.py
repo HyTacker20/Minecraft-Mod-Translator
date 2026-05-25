@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import traceback
 
 current_dir = os.path.dirname(__file__)

@@ -1,4 +1,4 @@
-from app.__version__ import __version__, VERSION
+from app.__version__ import VERSION, __version__
 
 
 class TestVersion:

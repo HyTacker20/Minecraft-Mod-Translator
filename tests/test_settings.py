@@ -1,9 +1,10 @@
 import argparse
+
 import pytest
 
-from app.core.settings import Settings
 from app.commands.translate import add_translate_arguments
-from app.parsers.json_parser import remove_comments_from_json, parse_json_with_comments
+from app.core.settings import Settings
+from app.parsers.json_parser import parse_json_with_comments, remove_comments_from_json
 
 
 class TestSettings:

@@ -1,10 +1,10 @@
-import os
 import json
+import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from app.core.settings import Settings
 from app.core.file_manager import FileManager
+from app.core.settings import Settings
 
 
 class TestFileManager:
@@ -48,7 +48,7 @@ class TestFileManager:
         out_path = tmp_path / "sub" / "output.json"
         fm._write_json_file(sample_en_us_json, str(out_path))
         assert out_path.exists()
-        with open(out_path, "r", encoding="utf-8") as f:
+        with open(out_path, encoding="utf-8") as f:
             data = json.load(f)
         assert data == sample_en_us_json
 
