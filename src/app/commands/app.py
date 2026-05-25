@@ -6,6 +6,7 @@ This module provides a user-friendly form-based terminal interface.
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import questionary
@@ -76,7 +77,9 @@ def display_title() -> None:
     console.print()
 
 
-def get_user_input(config_data: dict[str, Any] | None = None) -> dict[str, Any]:
+def get_user_input(
+    config_data: dict[str, Any] | None = None, config_path: Path | None = None
+) -> dict[str, Any]:
     """Collect user input through a form interface."""
     if config_data is None:
         config_data = {}
@@ -173,6 +176,113 @@ def get_user_input(config_data: dict[str, Any] | None = None) -> dict[str, Any]:
             {"name": "Vietnamese (vi_VN)", "value": "vi_VN"},
             {"name": "Welsh (cy_GB)", "value": "cy_GB"},
         ]
+
+        language_names = {option["value"]: option["name"] for option in language_options}
+
+        if config_data:
+            source = config_data.get("source", "en_US")
+            target = config_data.get("target", "es_ES")
+            provider = config_data.get("provider", "google")
+            config_output = config_data.get("output", "")
+
+            source_name = language_names.get(source, source)
+            target_name = language_names.get(target, target)
+
+            os.system("cls" if os.name == "nt" else "clear")
+            display_title()
+
+            config_summary = Table(show_header=False, box=box.SIMPLE)
+            config_summary.add_column("Parameter", style="secondary")
+            config_summary.add_column("Value", style="primary")
+            config_summary.add_row("Config file", str(config_path) if config_path else "translator.toml")
+            config_summary.add_row("Source language", source_name)
+            config_summary.add_row("Target language", target_name)
+            config_summary.add_row("Provider", provider)
+            if config_output:
+                config_summary.add_row("Output path", config_output)
+
+            console.print()
+            console.print("[bold]Saved configuration found:[/bold]")
+            console.print(config_summary)
+            console.print()
+
+            mode = questionary.select(
+                "How to proceed?",
+                choices=[
+                    {"name": "Quick start with saved settings", "value": "quick"},
+                    {"name": "Manual setup", "value": "manual"},
+                ],
+                default={"name": "Quick start with saved settings", "value": "quick"},
+                style=QUESTIONARY_STYLE,
+                use_jk_keys=False,
+            ).ask()
+
+            if mode is None:
+                sys.exit(0)
+
+            if mode == "quick":
+                if config_path:
+                    config_dir = str(config_path.parent)
+                    if any(f.endswith(".jar") for f in os.listdir(config_dir)):
+                        mods_path = config_dir
+                    else:
+                        mods_path = os.path.join(os.getcwd(), "mods")
+                else:
+                    mods_path = os.path.join(os.getcwd(), "mods")
+
+                if not os.path.exists(mods_path):
+                    console.print(
+                        f"[bold red]Mods path '{mods_path}' does not exist. Exiting.[/bold red]"
+                    )
+                    sys.exit(1)
+
+                mods_path = os.path.abspath(mods_path)
+
+                if config_output:
+                    output_path = os.path.abspath(os.path.join(mods_path, config_output))
+                else:
+                    output_path = os.path.join(os.path.dirname(mods_path), "translated_mods")
+
+                os.makedirs(output_path, exist_ok=True)
+
+                os.system("cls" if os.name == "nt" else "clear")
+
+                console.print("\n[bold]Quick start settings:[/bold]")
+
+                quick_table = Table(show_header=False, box=box.SIMPLE)
+                quick_table.add_column("Parameter", style="secondary")
+                quick_table.add_column("Value", style="primary")
+                quick_table.add_row("Mods path", mods_path)
+                quick_table.add_row("Source language", source_name)
+                quick_table.add_row("Target language", target_name)
+                quick_table.add_row("Translation method", provider.capitalize())
+                quick_table.add_row("Output path", output_path)
+
+                console.print(quick_table)
+                console.print()
+
+                confirmed = questionary.confirm(
+                    "Continue with these settings?",
+                    default=True,
+                    style=QUESTIONARY_STYLE,
+                ).ask()
+
+                if confirmed is None or not confirmed:
+                    sys.exit(0)
+
+                os.system("cls" if os.name == "nt" else "clear")
+
+                return {
+                    "path": mods_path,
+                    "source": source,
+                    "target": target,
+                    "output": output_path,
+                    "provider": provider,
+                }
+
+        mods_path = questionary.text(
+            "Path to mods folder:", default=os.path.join(os.getcwd(), "mods"), style=QUESTIONARY_STYLE
+        ).ask()
 
         language_names = {option["value"]: option["name"] for option in language_options}
 
@@ -631,7 +741,9 @@ def main(debug: bool = False) -> None:
             input("Press Enter to exit...")
             return
 
-        params = get_user_input(load_config(config_path) if (config_path := find_config_file("./mods")) else None)
+        config_path = find_config_file("./mods")
+        config_data = load_config(config_path) if config_path else None
+        params = get_user_input(config_data, config_path)
 
         if params.get("provider") != "google":
             from ..core.provider_check import check_provider_available
